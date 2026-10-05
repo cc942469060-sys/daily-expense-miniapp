@@ -1,0 +1,6 @@
+.name-input { margin-top: 22rpx; }
+.icon-grid { display: flex; flex-wrap: wrap; margin: 18rpx -5rpx; }
+.icon-choice { margin: 5rpx; width: calc(12.5% - 10rpx); padding: 14rpx 0; text-align: center; font-size: 36rpx; border-radius: 14rpx; background: #F5F7F2; border: 2rpx solid transparent; }
+.icon-choice.selected { border-color: #6C9F78; background: #E9F2E6; }
+.category-info { flex: 1; }
+.migration-picker { margin: 20rpx 0; }

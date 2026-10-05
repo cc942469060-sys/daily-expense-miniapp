@@ -1,0 +1,5 @@
+.filters { padding: 22rpx; }
+.filter-row { margin-top: 20rpx; gap: 8rpx; }
+.filter-row .chip { font-size: 22rpx; padding: 18rpx 14rpx; }
+.summary { margin-top: 28rpx; }
+.load-more { margin-top: 28rpx; }

@@ -1,0 +1,10 @@
+{
+  "description": "小日账：个人消费记录与统计",
+  "miniprogramRoot": "miniprogram/",
+  "compileType": "miniprogram",
+  "appid": "touristappid",
+  "projectname": "daily-expense-miniapp",
+  "setting": { "es6": true, "enhance": true, "postcss": true, "minified": true, "urlCheck": true },
+  "packOptions": { "ignore": [], "include": [] },
+  "editorSetting": { "tabIndent": "insertSpaces", "tabSize": 2 }
+}

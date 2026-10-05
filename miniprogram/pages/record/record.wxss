@@ -1,0 +1,10 @@
+.amount-panel { margin-top: 24rpx; padding: 32rpx; border-radius: 28rpx; background: #EAF1E6; }
+.amount-symbol { font-size: 42rpx; }
+.amount-input { font-size: 66rpx; height: 100rpx; flex: 1; min-width: 0; font-weight: 650; }
+.category-grid { display: flex; flex-wrap: wrap; margin: -6rpx; }
+.category { width: calc(25% - 12rpx); margin: 6rpx; padding: 20rpx 4rpx; text-align: center; border-radius: 20rpx; background: #F7F8F4; border: 2rpx solid transparent; }
+.chosen { background: #E9F2E6; border-color: #6C9F78; color: #22684C; }
+.category-icon { font-size: 42rpx; }
+.category-name { font-size: 23rpx; margin-top: 10rpx; overflow-wrap: anywhere; }
+.save-area { margin-top: 32rpx; }
+.extra-button { margin-top: 18rpx; }

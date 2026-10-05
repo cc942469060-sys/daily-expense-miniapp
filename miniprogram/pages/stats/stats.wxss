@@ -1,0 +1,19 @@
+.period-tabs { display: flex; padding: 8rpx; margin-top: 30rpx; background: #E9EDE5; border-radius: 22rpx; }
+.period-tab { flex: 1; text-align: center; padding: 18rpx; color: #7B897F; border-radius: 16rpx; }
+.period-tab.selected { background: #FFF; color: #22684C; font-weight: 650; }
+.period-switch { margin-top: 24rpx; gap: 12rpx; }
+.period-label { font-weight: 600; font-size: 25rpx; text-align: center; }
+.back-current { text-align: center; color: #7B897F; font-size: 22rpx; padding: 18rpx; }
+.refund-note { color: #C5D8CC; font-size: 23rpx; margin-top: 24rpx; }
+.chart-scroll { width: 100%; margin-top: 28rpx; }
+.chart { display: flex; height: 280rpx; }
+.bar-column { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; }
+.bar-space { width: 100%; height: 236rpx; display: flex; align-items: flex-end; justify-content: center; border-bottom: 1rpx solid #DDE5DC; padding: 0 8rpx; }
+.bar { width: 100%; max-width: 42rpx; border-radius: 8rpx 8rpx 0 0; background: #6D9A73; min-height: 2rpx; }
+.bar-label { font-size: 20rpx; color: #7B897F; margin-top: 12rpx; }
+.category-stat { padding-top: 30rpx; }
+.stat-progress { margin-top: 14rpx; height: 10rpx; }
+.category-money { font-weight: 600; font-size: 27rpx; flex-shrink: 0; }
+.top-row { padding-top: 26rpx; }
+.top-description { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.top-date { margin-top: 9rpx; }

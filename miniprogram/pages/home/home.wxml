@@ -1,0 +1,15 @@
+<view class="page">
+  <view class="row"><view><view class="title">把日子，记清楚。</view><view class="subtitle">小日账 · {{today}}</view></view><text class="plant">🌿</text></view>
+  <view wx:if="{{storageError}}" class="error" bindtap="backup">{{storageError}}<view class="link">前往恢复备份 ›</view></view>
+  <block wx:else>
+    <view class="panel hero">
+      <view class="eyebrow muted">今日消费</view><view class="amount" bindtap="todayBills"><text class="currency">¥</text>{{todayText}}</view>
+      <view class="metrics"><view bindtap="monthBills"><view class="muted">本月累计 ›</view><view class="metric">¥{{monthText}}</view></view><view><view class="muted">今天记了</view><view class="metric">{{count}} 笔</view></view></view>
+    </view>
+    <button class="primary add-button" bindtap="add">＋ 记一笔</button>
+    <view wx:if="{{budget}}" class="panel"><view class="row"><text class="section-title">本月预算</text><text class="muted">{{overspent ? '已超出' : '还可花'}} ¥{{remainingText}}</text></view><view class="progress budget-progress"><view class="progress-fill" style="width: {{budgetPercent}}%;"></view></view></view>
+    <view class="row recent-heading"><text class="section-title">最近记录</text><text class="link" bindtap="allBills">全部账单 ›</text></view>
+    <bill-list groups="{{groups}}" bind:select="select" />
+    <view class="note" wx:if="{{groups.length}}">显示最近 8 笔，日期小计包含当天全部记录。点击记录可编辑或登记退款。</view>
+  </block>
+</view>

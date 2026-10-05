@@ -1,0 +1,10 @@
+<view wx:if="{{!groups.length}}" class="empty"><view class="empty-icon">🌱</view><view>{{emptyText}}</view></view>
+<view wx:for="{{groups}}" wx:for-item="group" wx:key="date" class="bill-group">
+  <view class="row group-heading"><text>{{group.date}}</text><text class="muted">小计 ¥{{group.totalText}}</text></view>
+  <view class="bill-card">
+    <view wx:for="{{group.records}}" wx:for-item="bill" wx:key="id" class="row bill-row" bindtap="select" data-id="{{bill.id}}" hover-class="bill-hover">
+      <view class="row start bill-main"><view class="bill-icon">{{bill.icon}}</view><view class="bill-description"><view class="bill-name">{{bill.note || bill.categoryName}}</view><view class="muted bill-meta">{{bill.categoryName}} · {{bill.time}}<text wx:if="{{bill.payment !== '未指定'}}"> · {{bill.payment}}</text></view></view></view>
+      <view class="bill-value"><view>¥{{bill.amountText}}</view><view wx:if="{{bill.refundCents}}" class="refund">已退 ¥{{bill.refundText}}</view></view>
+    </view>
+  </view>
+</view>

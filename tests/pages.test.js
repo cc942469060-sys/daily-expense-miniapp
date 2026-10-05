@@ -1,0 +1,22 @@
+const test = require('node:test'); const assert = require('node:assert/strict'); const path = require('node:path');
+const store = require('../miniprogram/utils/store'); let db; let navigation;
+function clone(v) { return v === undefined ? '' : JSON.parse(JSON.stringify(v)); }
+function page(name) {
+  let config; global.Page = value=>{ config=value; }; const file = path.resolve(__dirname,`../miniprogram/pages/${name}/${name}.js`); delete require.cache[file]; require(file);
+  const p = { data: clone(config.data), setData(value) { Object.assign(this.data,value); } }; for (const [k,v] of Object.entries(config)) if (typeof v === 'function') p[k]=v.bind(p); return p;
+}
+test.beforeEach(()=>{ db=new Map(); navigation=[]; global.wx={ getStorageSync:key=>clone(db.get(key)),setStorageSync:(key,v)=>db.set(key,clone(v)),showToast:()=>{},showModal:options=>options.success && options.success({confirm:true}),navigateBack:()=>navigation.push('back'),navigateTo:options=>navigation.push(options.url),setNavigationBarTitle:()=>{},pageScrollTo:()=>{} }; });
+test('页面流程：新增消费 → 首页 → 统计 → 筛选明细 → 修改退款 → 删除',()=>{
+  const record=page('record'); record.onLoad({}); record.input({currentTarget:{dataset:{field:'amount'}},detail:{value:'28.50'}}); record.save(); assert.deepEqual(navigation,['back']);
+  const home=page('home'); home.onShow(); assert.equal(home.data.todayText,'28.50'); assert.equal(home.data.count,1);
+  const stats=page('stats'); stats.onShow(); assert.equal(stats.data.stats.totalText,'28.50'); assert.equal(stats.data.stats.count,1);
+  const bills=page('bills'); bills.onLoad({categoryId:'food'}); bills.onShow(); assert.equal(bills.data.count,1);
+  const id=store.read().records[0].id; const edit=page('record'); edit.onLoad({id}); edit.input({currentTarget:{dataset:{field:'refund'}},detail:{value:'8.50'}}); edit.save(); home.onShow(); stats.onShow(); bills.onShow(); assert.equal(home.data.todayText,'20.00'); assert.equal(stats.data.stats.totalText,'20.00'); assert.equal(bills.data.totalText,'20.00'); edit.remove(); home.onShow(); assert.equal(home.data.count,0);
+});
+test('保存并继续记账清空金额备注，保留日期与分类',()=>{ const p=page('record'); p.onLoad({}); p.setData({amount:'8.88',note:'早餐',date:'2024-02-10'}); p.saveMore(); assert.equal(store.read().records.length,1); assert.equal(p.data.amount,''); assert.equal(p.data.note,''); assert.equal(p.data.date,'2024-02-10'); assert.equal(navigation.length,0); });
+test('错误日期筛选显示错误，重置后账单正常显示',()=>{ const p=page('bills'); p.onLoad({start:'2024-03-01',end:'2024-02-01'}); p.onShow(); assert.match(p.data.storageError,/开始日期/); p.clear(); assert.equal(p.data.storageError,''); });
+test('存储损坏时首页与我的仍提供备份恢复入口',()=>{ db.set(store.KEY,{bad:true}); const home=page('home'); home.onShow(); assert.match(home.data.storageError,/数据异常/); home.backup(); const mine=page('mine'); mine.onShow(); mine.backup(); assert.equal(navigation.filter(v=>v==='/pages/backup/backup').length,2); });
+test('取消发送备份不会更新成功发送时间',async()=>{ const p=page('backup'); store.read(); wx.env={USER_DATA_PATH:'/sandbox'}; wx.getFileSystemManager=()=>({writeFile:options=>options.success()}); wx.shareFileMessage=options=>options.fail({errMsg:'cancel'}); await p.exportFile('json'); assert.equal(store.read().lastBackupAt,''); assert.equal(p.data.busy,false); assert.equal(p.data.fileName,'xiaorizhang-backup.json'); });
+test('成功发送 JSON 后才更新备份时间，CSV 不更新备份时间',async()=>{ const p=page('backup'); store.read(); wx.env={USER_DATA_PATH:'/sandbox'}; wx.getFileSystemManager=()=>({writeFile:options=>options.success()}); wx.shareFileMessage=options=>options.success(); await p.exportFile('csv'); assert.equal(store.read().lastBackupAt,''); await p.exportFile('json'); assert.ok(store.read().lastBackupAt); });
+test('取消选取备份文件不会替换账本且释放忙碌状态',async()=>{ const p=page('backup'); store.read(); wx.chooseMessageFile=options=>options.fail({errMsg:'cancel'}); await p.importJson(); assert.equal(store.read().records.length,0); assert.equal(p.data.busy,false); assert.equal(db.has(store.SAFETY_KEY),false); });
+test('无效 JSON 文件被拒绝，当前账单不变',async()=>{ const p=page('backup'); const record=page('record'); record.onLoad({}); record.setData({amount:'12.50'}); record.save(); wx.chooseMessageFile=options=>options.success({tempFiles:[{path:'/backup.json',size:2}]}); wx.getFileSystemManager=()=>({readFile:options=>options.success({data:'{}'})}); await p.importJson(); assert.equal(store.read().records.length,1); assert.equal(p.data.busy,false); assert.equal(db.has(store.SAFETY_KEY),false); });

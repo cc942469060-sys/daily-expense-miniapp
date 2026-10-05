@@ -1,0 +1,6 @@
+.profile { padding: 14rpx 0; }
+.profile .title { font-size: 37rpx; }
+.avatar { font-size: 56rpx; width: 112rpx; height: 112rpx; background: #E7EEDC; border-radius: 34rpx; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.budget-form { margin-top: 22rpx; }
+.budget-form input { flex: 1; min-width: 0; }
+.version { text-align: center; font-size: 22rpx; color: #94A095; margin-top: 44rpx; }

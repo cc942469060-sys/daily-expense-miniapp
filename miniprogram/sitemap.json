@@ -1,0 +1,1 @@
+{ "desc": "个人账本不索引", "rules": [{ "action": "disallow", "page": "*" }] }
