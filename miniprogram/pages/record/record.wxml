@@ -1,13 +1,18 @@
 <view class="page" wx:if="{{ready}}">
   <view class="subtitle">{{id ? '每一笔，都有迹可循' : '记下一笔小小的日常'}}</view>
-  <view class="amount-panel"><view class="field-label">消费金额（元）</view><view class="row start"><text class="amount-symbol">¥</text><input class="amount-input" type="digit" value="{{amount}}" placeholder="0.00" maxlength="10" focus="{{!id}}" data-field="amount" bindinput="input" /></view></view>
-  <view class="panel"><view class="field-label">选择分类</view><view class="category-grid"><view wx:for="{{categories}}" wx:key="id" class="category {{categoryId === item.id ? 'chosen' : ''}}" data-id="{{item.id}}" bindtap="category"><view class="category-icon">{{item.icon}}</view><view class="category-name">{{item.name}}</view></view></view></view>
-  <view class="panel">
-    <view class="field row"><text>消费日期</text><picker mode="date" value="{{date}}" start="2000-01-01" end="{{today}}" bindchange="dateChange"><view class="link">{{date}} ›</view></picker></view>
-    <view class="field row"><text>时间</text><picker mode="time" value="{{time}}" bindchange="timeChange"><view class="link">{{time}} ›</view></picker></view>
-    <view class="field row"><text>支付方式</text><picker range="{{payments}}" value="{{paymentIndex}}" bindchange="paymentChange"><view class="link">{{payments[paymentIndex]}} ›</view></picker></view>
-    <view class="field"><view class="field-label">备注 · 可选</view><input class="input" value="{{note}}" placeholder="例如：午饭、买耳机" maxlength="100" data-field="note" bindinput="input" /></view>
-    <view wx:if="{{id}}" class="field"><view class="field-label">累计退款金额（元）</view><input class="input" type="digit" value="{{refund}}" maxlength="10" data-field="refund" bindinput="input" /><view class="note">填写这笔消费的累计退款额，统计会从原消费日期扣减。无退款填 0。</view></view>
+  <view class="type-tabs">
+    <view class="type-tab {{type === 'expense' ? 'selected' : ''}}" data-type="expense" bindtap="typeChange">支出</view>
+    <view class="type-tab {{type === 'income' ? 'selected' : ''}}" data-type="income" bindtap="typeChange">收入</view>
   </view>
-  <view class="save-area"><button class="primary" bindtap="save" loading="{{saving}}" disabled="{{saving}}">{{id ? '保存修改' : '保存这笔消费'}}</button><button wx:if="{{!id}}" class="secondary extra-button" bindtap="saveMore" disabled="{{saving}}">保存并再记一笔</button><button wx:else class="danger extra-button" bindtap="remove" disabled="{{saving}}">删除账单</button></view>
+  <view class="amount-panel"><view class="field-label">{{type === 'income' ? '收入' : '支出'}}金额（元）</view><view class="row start"><text class="amount-symbol">¥</text><input class="amount-input" type="digit" value="{{amount}}" placeholder="0.00" maxlength="10" focus="{{!id}}" data-field="amount" bindinput="input" /></view></view>
+  <view class="panel"><view class="field-label">选择{{type === 'income' ? '收入' : '支出'}}分类</view><view class="category-grid"><view wx:for="{{categories}}" wx:key="id" class="category {{categoryId === item.id ? 'chosen' : ''}}" data-id="{{item.id}}" bindtap="category"><view class="category-icon">{{item.icon}}</view><view class="category-name">{{item.name}}</view></view></view></view>
+  <view wx:if="{{type === 'income'}}" class="note">按实际到账金额记录。报销记为收入后，请勿再将同笔款项登记为支出退款；商品退款请在原支出中填写。</view>
+  <view class="panel">
+    <view class="field row"><text>{{type === 'income' ? '到账日期' : '支出日期'}}</text><picker mode="date" value="{{date}}" start="2000-01-01" end="{{today}}" bindchange="dateChange"><view class="link">{{date}} ›</view></picker></view>
+    <view class="field row"><text>时间</text><picker mode="time" value="{{time}}" bindchange="timeChange"><view class="link">{{time}} ›</view></picker></view>
+    <view class="field row"><text>{{type === 'income' ? '收款方式' : '支付方式'}}</text><picker range="{{payments}}" value="{{paymentIndex}}" bindchange="paymentChange"><view class="link">{{payments[paymentIndex]}} ›</view></picker></view>
+    <view class="field"><view class="field-label">备注 · 可选</view><input class="input" value="{{note}}" placeholder="{{type === 'income' ? '例如：9 月工资、差旅报销、生日红包' : '例如：午饭、买耳机'}}" maxlength="100" data-field="note" bindinput="input" /></view>
+    <view wx:if="{{id && type === 'expense'}}" class="field"><view class="field-label">累计退款金额（元）</view><input class="input" type="digit" value="{{refund}}" maxlength="10" data-field="refund" bindinput="input" /><view class="note">填写这笔支出的累计退款额，统计会从原支出日期扣减。无退款填 0。</view></view>
+  </view>
+  <view class="save-area"><button class="primary" bindtap="save" loading="{{saving}}" disabled="{{saving}}">{{id ? '保存修改' : type === 'income' ? '保存收入' : '保存支出'}}</button><button wx:if="{{!id}}" class="secondary extra-button" bindtap="saveMore" disabled="{{saving}}">保存并再记一笔</button><button wx:else class="danger extra-button" bindtap="remove" disabled="{{saving}}">删除账单</button></view>
 </view>

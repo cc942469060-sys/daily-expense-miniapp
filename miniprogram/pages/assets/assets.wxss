@@ -1,0 +1,10 @@
+.asset-action { min-height: 112rpx; margin-top: 26rpx; padding: 24rpx; font-size: 32rpx; line-height: 1.5; display: flex; align-items: center; justify-content: center; }
+.hero-note { color: #C5D8CC; font-size: 22rpx; line-height: 1.7; margin-top: 26rpx; }
+.list-tools { margin: 24rpx 0; }
+.category-filter { margin-top: 20rpx; }.category-filter .input { background: #FFF; }
+.kind-label { font-size: 20rpx; margin-left: 12rpx; color: #7B897F; font-weight: 400; }
+.group-total { font-weight: 600; overflow-wrap: anywhere; text-align: right; max-width: 50%; }
+.account-row { display: flex; justify-content: space-between; align-items: center; gap: 20rpx; }
+.account-info { flex: 1; min-width: 0; }.account-name { overflow-wrap: anywhere; }
+.account-value { text-align: right; max-width: 48%; overflow-wrap: anywhere; font-weight: 600; }
+.stale { font-size: 22rpx; color: #A56B37; margin-top: 8rpx; }

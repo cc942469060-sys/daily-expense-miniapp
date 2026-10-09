@@ -41,3 +41,10 @@ button[disabled] { opacity: .48; }
 .arrow { color: #97A49B; font-size: 36rpx; }
 .error { background: #FCEEE7; color: #934A33; padding: 24rpx; border-radius: 20rpx; line-height: 1.8; margin-top: 24rpx; }
 .spacer { height: 24rpx; }
+.type-tabs { display: flex; padding: 8rpx; margin-top: 26rpx; background: #E9EDE5; border-radius: 22rpx; }
+.type-tab { flex: 1; text-align: center; padding: 20rpx 12rpx; color: #64756A; border-radius: 16rpx; }
+.type-tab.selected { background: #FFF; color: #22684C; font-weight: 650; }
+.overview-metrics { display: flex; gap: 24rpx; margin-top: 22rpx; }
+.overview-metrics > view { flex: 1; min-width: 0; }
+.metric { overflow-wrap: anywhere; }
+.income-text { color: #A85C2F; }

@@ -11,3 +11,6 @@
 .bill-value { text-align: right; font-weight: 650; font-size: 29rpx; }
 .refund { color: #738C77; font-size: 20rpx; margin-top: 8rpx; font-weight: 400; }
 .bill-hover { opacity: .65; }
+.group-heading { flex-wrap: wrap; gap: 8rpx; }
+.group-heading .muted { overflow-wrap: anywhere; }
+.bill-value { max-width: 48%; overflow-wrap: anywhere; }

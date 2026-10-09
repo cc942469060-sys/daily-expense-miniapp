@@ -1,11 +1,12 @@
 {
-  "pages": ["pages/home/home", "pages/stats/stats", "pages/mine/mine", "pages/record/record", "pages/bills/bills", "pages/categories/categories", "pages/backup/backup"],
+  "pages": ["pages/home/home", "pages/stats/stats", "pages/assets/assets", "pages/mine/mine", "pages/record/record", "pages/bills/bills", "pages/categories/categories", "pages/backup/backup", "pages/account/account", "pages/asset-categories/asset-categories"],
   "window": { "navigationBarTitleText": "小日账", "navigationBarBackgroundColor": "#F6F7F2", "navigationBarTextStyle": "black", "backgroundColor": "#F6F7F2" },
   "tabBar": {
     "color": "#7B877F", "selectedColor": "#22684C", "backgroundColor": "#FFFFFF", "borderStyle": "white",
     "list": [
       { "pagePath": "pages/home/home", "text": "首页", "iconPath": "assets/home.png", "selectedIconPath": "assets/home-active.png" },
       { "pagePath": "pages/stats/stats", "text": "统计", "iconPath": "assets/stats.png", "selectedIconPath": "assets/stats-active.png" },
+      { "pagePath": "pages/assets/assets", "text": "资产", "iconPath": "assets/assets.png", "selectedIconPath": "assets/assets-active.png" },
       { "pagePath": "pages/mine/mine", "text": "我的", "iconPath": "assets/mine.png", "selectedIconPath": "assets/mine-active.png" }
     ]
   },

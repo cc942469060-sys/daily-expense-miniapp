@@ -3,3 +3,6 @@
 .filter-row .chip { font-size: 22rpx; padding: 18rpx 14rpx; }
 .summary { margin-top: 28rpx; }
 .load-more { margin-top: 28rpx; }
+.filter-row { flex-wrap: wrap; }
+.summary .row { flex-wrap: wrap; }
+.summary .section-title { overflow-wrap: anywhere; }

@@ -1,6 +1,19 @@
 <view class="page">
   <view class="row"><view class="title">账单明细</view><button class="secondary small-button" bindtap="add">＋ 记一笔</button></view>
-  <view class="panel filters"><input class="input" value="{{query}}" placeholder="搜索备注或分类，例如：咖啡" maxlength="100" bindinput="search" /><view class="row filter-row"><picker mode="date" start="2000-01-01" end="{{today}}" value="{{start || today}}" bindchange="dateChange" data-field="start"><view class="chip">{{start || '开始日期'}} ▾</view></picker><text class="muted">至</text><picker mode="date" start="2000-01-01" end="{{today}}" value="{{end || today}}" bindchange="dateChange" data-field="end"><view class="chip">{{end || '结束日期'}} ▾</view></picker></view><view class="row filter-row"><picker range="{{categoryNames}}" value="{{categoryIndex}}" bindchange="categoryChange"><view class="chip">{{categoryNames[categoryIndex] || '全部分类'}} ▾</view></picker><picker range="{{payments}}" value="{{paymentIndex}}" bindchange="paymentChange"><view class="chip">{{payments[paymentIndex]}} ▾</view></picker><text class="link" bindtap="clear">重置</text></view></view>
+  <view class="type-tabs">
+    <view class="type-tab {{!type ? 'selected' : ''}}" data-type="" bindtap="typeChange">全部</view>
+    <view class="type-tab {{type === 'expense' ? 'selected' : ''}}" data-type="expense" bindtap="typeChange">支出</view>
+    <view class="type-tab {{type === 'income' ? 'selected' : ''}}" data-type="income" bindtap="typeChange">收入</view>
+  </view>
+  <view class="panel filters">
+    <input class="input" value="{{query}}" placeholder="搜索备注或分类，例如：咖啡、工资" maxlength="100" bindinput="search" />
+    <view class="row filter-row"><picker mode="date" start="2000-01-01" end="{{today}}" value="{{start || today}}" bindchange="dateChange" data-field="start"><view class="chip">{{start || '开始日期'}} ▾</view></picker><text class="muted">至</text><picker mode="date" start="2000-01-01" end="{{today}}" value="{{end || today}}" bindchange="dateChange" data-field="end"><view class="chip">{{end || '结束日期'}} ▾</view></picker></view>
+    <view class="row filter-row"><picker range="{{categoryNames}}" value="{{categoryIndex}}" bindchange="categoryChange"><view class="chip">{{categoryNames[categoryIndex] || '全部分类'}} ▾</view></picker><picker range="{{payments}}" value="{{paymentIndex}}" bindchange="paymentChange"><view class="chip">{{payments[paymentIndex]}} ▾</view></picker><text class="link" bindtap="clear">重置</text></view>
+  </view>
   <view wx:if="{{storageError}}" class="error">{{storageError}}</view>
-  <block wx:else><view class="row summary"><text class="muted">共 {{count}} 笔</text><text class="section-title">净消费 ¥{{totalText}}</text></view><bill-list groups="{{groups}}" empty-text="没有找到符合条件的账单" bind:select="select" /><button wx:if="{{hasMore}}" class="secondary load-more" bindtap="more">加载更多（已显示 {{shown}} 笔）</button></block>
+  <block wx:else>
+    <view class="summary"><view class="row"><text class="muted">共 {{count}} 笔</text><text wx:if="{{type}}" class="section-title">{{type === 'income' ? '收入' : '净支出'}} ¥{{totalText}}</text><text wx:else class="section-title">结余 ¥{{summary.balanceText}}</text></view><view wx:if="{{!type}}" class="note">收入 ¥{{summary.incomeText}} · 支出 ¥{{summary.expenseText}}</view></view>
+    <bill-list groups="{{groups}}" empty-text="没有找到符合条件的账单" bind:select="select" />
+    <button wx:if="{{hasMore}}" class="secondary load-more" bindtap="more">加载更多（已显示 {{shown}} 笔）</button>
+  </block>
 </view>

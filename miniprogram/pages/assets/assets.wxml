@@ -1,0 +1,27 @@
+<view class="page">
+  <view class="row"><view class="title">我的资产</view><button class="secondary small-button" bindtap="toggleHidden" disabled="{{storageError}}">{{hidden ? '显示金额' : '隐藏金额'}}</button></view>
+  <view class="subtitle">把余额、投资和欠款放在一起看</view>
+  <view wx:if="{{storageError}}" class="error">{{storageError}}</view>
+  <block wx:else>
+    <view class="panel hero">
+      <view class="eyebrow">净资产（元）</view><view class="amount">{{netText}}</view>
+      <view class="metrics"><view bindtap="kindChange" data-kind="asset"><view class="muted">总资产 ›</view><view class="metric">{{assetText}}</view></view><view bindtap="kindChange" data-kind="liability"><view class="muted">总负债 ›</view><view class="metric">{{liabilityText}}</view></view></view>
+      <view class="hero-note"><view>净资产 = 总资产 − 总负债</view><view>按各账户最近一次更新金额汇总</view></view>
+    </view>
+    <view class="note">金额由你手动更新，按人民币汇总。记账后如需查看最新资产，请同步更新账户余额。钱包内已单独登记的理财请勿重复计入。</view>
+    <button class="primary asset-action" bindtap="add">＋ 添加资产或负债</button>
+    <view class="type-tabs"><view class="type-tab {{kind === '' ? 'selected' : ''}}" data-kind="" bindtap="kindChange">全部</view><view class="type-tab {{kind === 'asset' ? 'selected' : ''}}" data-kind="asset" bindtap="kindChange">资产</view><view class="type-tab {{kind === 'liability' ? 'selected' : ''}}" data-kind="liability" bindtap="kindChange">负债</view></view>
+    <picker class="category-filter" range="{{categories}}" range-key="name" value="{{categoryIndex}}" bindchange="categoryChange"><view class="input">{{categories[categoryIndex].name}} ▾</view></picker>
+    <view class="row list-tools"><button class="secondary small-button" bindtap="toggleArchived">{{archived ? '返回使用中账户' : '已归档（' + archivedCount + '）'}}</button><button class="secondary small-button" bindtap="categories">分类管理</button></view>
+    <view class="muted">{{archived ? '已归档' : '使用中'}} · {{count}} 个账户</view>
+    <view wx:if="{{!groups.length}}" class="panel empty"><view class="empty-icon">💼</view><view>{{categoryId ? '这个分类下还没有账户' : archived ? '这里还没有归档账户' : '先添加一张银行卡、一个钱包或一笔欠款'}}</view><view class="note">同一分类下可以添加多个账户</view></view>
+    <view wx:for="{{groups}}" wx:key="id" wx:for-item="group" class="panel">
+      <view class="row"><view class="section-title">{{group.icon}} {{group.name}}<text class="kind-label">{{group.kind === 'liability' ? '负债' : '资产'}}</text></view><view class="group-total">{{group.amountText}}</view></view>
+      <view wx:if="{{!hidden && !archived && group.percent !== ''}}" class="note">占{{group.kind === 'liability' ? '总负债' : '总资产'}} {{group.percent}}%</view>
+      <view wx:for="{{group.accounts}}" wx:key="id" class="menu-item account-row" bindtap="open" data-id="{{item.id}}">
+        <view class="account-info"><view class="account-name">{{item.name}}<text wx:if="{{item.cardLast4}}" class="muted"> · {{item.cardLast4}}</text></view><view class="subtitle">金额日期 {{item.valuedOn}}</view><view wx:if="{{item.stale}}" class="stale">超过 30 天未更新</view></view>
+        <view class="account-value {{item.kind === 'liability' ? 'income-text' : ''}}">{{item.amountText}} <text class="arrow">›</text></view>
+      </view>
+    </view>
+  </block>
+</view>

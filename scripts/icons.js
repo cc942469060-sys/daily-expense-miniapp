@@ -9,6 +9,7 @@ function png(pixels) {
   return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]), chunk('IHDR', header), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
 }
 const shapes = {
+  assets: [[12,19,51,19],[12,19,12,51],[12,51,52,51],[52,51,52,19],[12,19,43,11],[43,11,43,19],[52,30,38,30],[38,30,38,41],[38,41,52,41],[44,35,46,35]],
   home: [[11,30,32,12],[32,12,53,30],[17,28,17,51],[17,51,47,51],[47,51,47,28],[27,51,27,36],[27,36,37,36],[37,36,37,51]],
   stats: [[14,50,14,37],[14,37,23,37],[23,37,23,50],[29,50,29,25],[29,25,38,25],[38,25,38,50],[44,50,44,14],[44,14,53,14],[53,14,53,50],[10,53,56,53]],
   mine: [[13,53,13,47],[13,47,17,40],[17,40,25,36],[25,36,39,36],[39,36,47,40],[47,40,51,47],[51,47,51,53],[13,53,51,53]]
@@ -24,4 +25,4 @@ for (const [name, lines] of Object.entries(shapes)) for (const active of [false,
   }
   fs.writeFileSync(path.join(root, `${name}${active ? '-active' : ''}.png`), png(pixels));
 }
-console.log('已生成 6 个 tabBar 图标');
+console.log(`已生成 ${Object.keys(shapes).length * 2} 个 tabBar 图标`);

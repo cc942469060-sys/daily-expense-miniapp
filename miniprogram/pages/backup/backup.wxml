@@ -1,9 +1,10 @@
 <view class="page">
   <view class="title">给记录留个副本</view><view class="subtitle">账本属于你，也随时可以带走</view>
   <view wx:if="{{storageError}}" class="error">{{storageError}}</view>
-  <view wx:else class="panel"><view class="row"><text>当前账单</text><text class="section-title">{{count}} 笔</text></view><view class="note">最近成功发送备份：{{backupTime}}</view></view>
-  <view class="panel"><view class="section-title">导出 CSV 账单</view><view class="note">包含日期、分类、原消费、退款、净消费、支付方式和备注，方便用 Excel 查看。CSV 用于阅读，不用于恢复账本。</view><button class="secondary action" bindtap="exportCsv" disabled="{{busy || storageError}}">导出全部账单</button></view>
-  <view class="panel"><view class="section-title">JSON 完整备份</view><view class="note">包含全部账单、分类和预算。请发送到自己的文件传输助手或可靠的保存位置；仅生成文件不代表已在设备之外保存。</view><button class="primary action" bindtap="exportJson" disabled="{{busy || storageError}}">生成并发送备份</button></view>
-  <view class="panel"><view class="section-title">从备份恢复</view><view class="note">先把 JSON 备份发送到微信聊天，再从聊天文件中选择。系统会校验数据并确认后恢复。</view><button class="secondary action" bindtap="importJson" disabled="{{busy}}">选择 JSON 备份</button><button wx:if="{{hasSafety}}" class="secondary action" bindtap="undoRestore" disabled="{{busy}}">恢复导入前副本</button></view>
+  <view wx:else class="panel"><view class="row"><text>当前账单</text><text class="section-title">{{count}} 笔</text></view><view class="row"><text>资产与负债账户</text><text class="section-title">{{accountCount}} 个</text></view><view class="note">最近成功发送备份：{{backupTime}}</view></view>
+  <view class="panel"><view class="section-title">导出 CSV 账单</view><view class="note">包含日期、时间、收支类型、分类、原始金额、退款金额、有效金额、收支方式和备注，方便用 Excel 查看。CSV 用于阅读，不用于恢复账本。</view><button class="secondary action" bindtap="exportCsv" disabled="{{busy || storageError}}">导出全部账单</button></view>
+  <view class="panel"><view class="section-title">导出 CSV 资产清单</view><view class="note">包含全部资产与负债账户（含归档）的分类、当前金额、金额日期、状态、尾号和备注。导出文件保留真实金额，隐藏金额仅影响页面显示。CSV 不包含更新历史，也不能用于恢复。</view><button class="secondary action" bindtap="exportAssets" disabled="{{busy || storageError}}">导出资产清单</button></view>
+  <view class="panel"><view class="section-title">JSON 完整备份</view><view class="note">包含全部收支账单、资产与负债账户、金额更新历史、分类和设置。v3 备份需在支持资产的小日账中恢复，文件保留真实金额。请发送到自己的文件传输助手或可靠的保存位置；仅生成文件不代表已在设备之外保存。</view><button class="primary action" bindtap="exportJson" disabled="{{busy || storageError}}">生成并发送备份</button></view>
+  <view class="panel"><view class="section-title">从备份恢复</view><view class="note">先把 JSON 备份发送到微信聊天，再从聊天文件中选择。支持 v1 支出、v2 收支及 v3 资产备份。恢复会替换全部数据，旧版备份没有资产账户，请留意确认提示。</view><button class="secondary action" bindtap="importJson" disabled="{{busy}}">选择 JSON 备份</button><button wx:if="{{hasSafety}}" class="secondary action" bindtap="undoRestore" disabled="{{busy}}">恢复导入前副本</button></view>
   <view wx:if="{{busy}}" class="note">正在处理，请稍候…</view><view wx:if="{{fileName}}" class="note">已生成：{{fileName}}。每次导出会更新设备内的同名文件，外部副本请自行保存。</view>
 </view>

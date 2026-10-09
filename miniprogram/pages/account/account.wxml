@@ -1,0 +1,45 @@
+<view class="page">
+  <view wx:if="{{storageError}}" class="error">{{storageError}}</view>
+  <block wx:else>
+    <block wx:if="{{mode === 'detail' && account}}">
+      <view class="row"><view class="title account-name">{{account.icon}} {{account.name}}</view><button class="secondary small-button" bindtap="toggleHidden">{{hidden ? '显示' : '隐藏'}}</button></view>
+      <view class="subtitle">{{kind === 'liability' ? '负债' : '资产'}} · {{account.categoryName}} {{account.cardLast4 ? '· 尾号 ' + account.cardLast4 : ''}} {{account.archived ? '· 已归档' : ''}}</view>
+      <view class="panel hero"><view class="eyebrow">{{label}}（元）</view><view class="amount">{{account.amountText}}</view><view class="muted">金额日期 {{account.valuedOn}}</view><view wx:if="{{account.stale}}" class="hero-note">超过 30 天未更新，可核对后更新金额日期</view></view>
+      <view wx:if="{{account.note}}" class="panel account-note">{{account.note}}</view>
+      <block wx:if="{{!account.archived}}"><button class="primary account-action" bindtap="beginUpdate">{{hidden ? '显示并更新金额' : '更新当前金额'}}</button><button class="secondary account-action" bindtap="edit">编辑账户资料</button></block>
+      <view class="note">手动更新为完整余额、估值或欠款金额；资产更新不计入收支账单。</view>
+      <view class="panel" id="history"><view class="section-title">金额更新历史 · {{historyCount}} 条</view>
+        <view wx:for="{{history}}" wx:key="id" class="history-item">
+          <view class="row"><text>{{item.opening ? '初始金额' : '手动更新'}}</text><text class="history-amount">{{item.amountText}}</text></view>
+          <view class="subtitle">金额日期 {{item.valuedOn}}</view>
+          <view wx:if="{{!item.opening}}" class="subtitle">原金额 {{item.previousText}} · 变动 {{item.changeText}}</view>
+          <view class="muted">记录于 {{item.recordedText}}</view><view wx:if="{{item.note}}" class="note account-note">{{item.note}}</view>
+        </view>
+        <view wx:if="{{historyPages > 1}}" class="history-paging"><view class="note">第 {{historyPage}} / {{historyPages}} 页 · 每页 50 条</view><view class="row"><button class="secondary small-button" bindtap="previousHistory" disabled="{{historyPage === 1}}">上一页</button><button class="secondary small-button" bindtap="moreHistory" disabled="{{!hasMore}}">下一页</button></view></view>
+      </view>
+      <button class="secondary account-action" bindtap="archive" disabled="{{busy}}">{{account.archived ? '重新启用账户' : '归档零余额账户'}}</button>
+      <button wx:if="{{canDelete}}" class="danger account-action" bindtap="remove" disabled="{{busy}}">删除误建账户</button>
+    </block>
+    <block wx:else>
+      <view class="title">{{mode === 'new' ? '添加资产或负债' : mode === 'value' ? '更新当前金额' : '编辑账户资料'}}</view>
+      <view class="subtitle">{{mode === 'value' ? '填写现在的完整金额，系统会保留每次更新' : '为每个账户起一个容易辨认的名字'}}</view>
+      <view wx:if="{{mode === 'new'}}" class="type-tabs"><view class="type-tab {{kind === 'asset' ? 'selected' : ''}}" data-kind="asset" bindtap="kindChange">资产</view><view class="type-tab {{kind === 'liability' ? 'selected' : ''}}" data-kind="liability" bindtap="kindChange">负债</view></view>
+      <view class="panel">
+        <block wx:if="{{mode !== 'value'}}">
+          <view class="field"><view class="field-label">{{kind === 'liability' ? '负债' : '资产'}}分类</view><picker range="{{categories}}" range-key="name" value="{{categoryIndex}}" bindchange="categoryChange"><view class="input">{{categories[categoryIndex].icon}} {{categories[categoryIndex].name}} ▾</view></picker></view>
+          <view class="field"><view class="field-label">账户名称</view><input class="input" value="{{name}}" data-field="name" bindinput="input" maxlength="24" placeholder="例如：招商工资卡、微信钱包" /></view>
+          <view class="field"><view class="field-label">卡号尾号（选填）</view><input class="input" value="{{cardLast4}}" data-field="cardLast4" bindinput="input" maxlength="4" type="number" placeholder="只填写最后 4 位" /></view>
+        </block>
+        <block wx:if="{{mode !== 'edit'}}">
+          <view class="field"><view class="field-label">{{label}}（元）</view><input class="input amount-input" value="{{amount}}" data-field="amount" bindinput="input" type="digit" maxlength="12" placeholder="0.00" /><view class="note">{{kind === 'liability' ? '填写当前未还金额，输入正数或 0' : '输入当前完整金额，可为 0；估值请按人民币填写'}}</view></view>
+          <view class="field"><view class="field-label">金额日期</view><picker mode="date" value="{{valuedOn}}" start="{{minDate}}" end="{{today}}" bindchange="dateChange"><view class="input">{{valuedOn}} ▾</view></picker></view>
+        </block>
+        <view class="field"><view class="field-label">{{mode === 'value' ? '本次更新备注（选填）' : '账户备注（选填）'}}</view><textarea class="input note-input" value="{{mode === 'value' ? updateNote : note}}" data-field="{{mode === 'value' ? 'updateNote' : 'note'}}" bindinput="input" maxlength="200" placeholder="最多 200 字" /></view>
+      </view>
+      <view wx:if="{{mode === 'new'}}" class="note">金额独立于收支账本，后续需要手动更新。支付宝、微信余额中已另列的基金或理财，请勿重复登记。</view>
+      <view wx:if="{{mode === 'edit'}}" class="note">修改资料不会生成金额历史；金额请通过「更新当前金额」调整。</view>
+      <button class="primary account-action" bindtap="save" loading="{{busy}}" disabled="{{busy}}">{{mode === 'new' ? '添加账户' : mode === 'value' ? '保存新金额' : '保存账户资料'}}</button>
+      <button wx:if="{{mode !== 'new'}}" class="secondary account-action" bindtap="cancel" disabled="{{busy}}">取消</button>
+    </block>
+  </block>
+</view>

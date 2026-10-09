@@ -1,14 +1,31 @@
 <view class="page">
-  <view class="title">钱花在哪里</view><view class="subtitle">看见消费，也更了解自己的生活</view>
+  <view class="title">收支一目了然</view><view class="subtitle">记录每一份收入，也看清每一笔支出</view>
   <view class="period-tabs"><view wx:for="{{modes}}" wx:key="id" class="period-tab {{mode === item.id ? 'selected' : ''}}" data-mode="{{item.id}}" bindtap="modeChange">{{item.name}}</view></view>
   <view class="row period-switch"><button class="secondary small-button" data-step="-1" bindtap="shift" disabled="{{!canPrev}}">‹</button><picker mode="date" value="{{anchor}}" start="2000-01-01" end="{{today}}" bindchange="dateChange"><view class="period-label">{{stats.label || anchor}} ▾</view></picker><button class="secondary small-button" data-step="1" bindtap="shift" disabled="{{!canNext}}">›</button></view>
   <view class="back-current" bindtap="current">回到当前周期</view>
   <view wx:if="{{storageError}}" class="error">{{storageError}}</view>
   <block wx:if="{{stats}}">
-    <view class="panel hero" bindtap="allBills"><view class="row"><text class="muted">本期净消费</text><text class="muted">查看明细 ›</text></view><view class="amount"><text class="currency">¥</text>{{stats.totalText}}</view><view class="metrics"><view><view class="muted">消费笔数</view><view class="metric">{{stats.count}} 笔</view></view><view><view class="muted">日均消费</view><view class="metric">¥{{stats.averageText}}</view></view></view><view wx:if="{{stats.refundCents}}" class="refund-note">原消费 ¥{{stats.grossText}} · 已退款 ¥{{stats.refundText}}</view></view>
-    <view class="note">日均按本期已过 {{stats.days}} 个自然日计算；历史周期按完整天数计算。</view>
-    <view wx:if="{{mode !== 'day'}}" class="panel"><view class="row"><text class="section-title">消费趋势</text><text class="muted">峰值 ¥{{stats.peakText}}</text></view><scroll-view scroll-x class="chart-scroll"><view class="chart" style="width: {{chartWidth}}rpx;"><view wx:for="{{stats.bars}}" wx:key="start" class="bar-column" data-start="{{item.start}}" data-end="{{item.end}}" bindtap="barBills"><view class="bar-space"><view class="bar" style="height: {{item.height}}%;"></view></view><view class="bar-label">{{item.label}}</view></view></view></scroll-view><view class="note">点击柱子查看明细，左右滑动查看更多日期。</view></view>
-    <view class="panel"><view class="section-title">分类消费</view><view wx:if="{{!stats.categories.length}}" class="empty">本期暂无净消费</view><view wx:for="{{stats.categories}}" wx:key="id" class="category-stat" bindtap="categoryBills" data-id="{{item.id}}"><view class="row"><view>{{item.icon}} {{item.name}} <text class="muted">{{item.percent}}%</text></view><text class="category-money">¥{{item.amountText}} ›</text></view><view class="progress stat-progress"><view class="progress-fill" style="width: {{item.width}}%; background: {{item.color}};"></view></view></view></view>
-    <view wx:if="{{stats.top.length}}" class="panel"><view class="section-title">本期大额消费</view><view wx:for="{{stats.top}}" wx:key="id" class="row top-row" bindtap="select" data-id="{{item.id}}"><view class="top-description"><view>{{item.icon}} {{item.note || item.categoryName}}</view><view class="muted top-date">{{item.date}} · {{item.categoryName}}</view></view><text class="category-money">¥{{item.amountText}}</text></view></view>
+    <view class="panel hero">
+      <view class="muted">本期结余</view><view class="amount" bindtap="overviewBills"><text class="currency">¥</text>{{stats.summary.balanceText}}</view>
+      <view class="metrics">
+        <view data-type="income" bindtap="overviewBills"><view class="muted">本期收入 ›</view><view class="metric">¥{{stats.summary.incomeText}}</view></view>
+        <view data-type="expense" bindtap="overviewBills"><view class="muted">本期支出 ›</view><view class="metric">¥{{stats.summary.expenseText}}</view></view>
+      </view>
+    </view>
+    <view class="note">结余 = 收入 − 净支出。退款扣减原支出日期，结余不代表账户余额。</view>
+    <view class="type-tabs">
+      <view class="type-tab {{type === 'expense' ? 'selected' : ''}}" data-type="expense" bindtap="typeChange">支出</view>
+      <view class="type-tab {{type === 'income' ? 'selected' : ''}}" data-type="income" bindtap="typeChange">收入</view>
+    </view>
+    <view class="panel" bindtap="allBills">
+      <view class="row"><text class="section-title">{{type === 'income' ? '本期收入' : '本期净支出'}}</text><text class="link">查看明细 ›</text></view>
+      <view class="amount {{type === 'income' ? 'income-text' : ''}}"><text class="currency">¥</text>{{stats.totalText}}</view>
+      <view class="overview-metrics"><view><view class="muted">{{type === 'income' ? '收入笔数' : '支出笔数'}}</view><view class="metric">{{stats.count}} 笔</view></view><view><view class="muted">{{type === 'income' ? '最大单笔收入' : '日均支出'}}</view><view class="metric">¥{{type === 'income' ? stats.maxText : stats.averageText}}</view></view></view>
+      <view wx:if="{{stats.refundCents}}" class="note">原支出 ¥{{stats.grossText}} · 已退款 ¥{{stats.refundText}}</view>
+    </view>
+    <view wx:if="{{type === 'expense'}}" class="note">日均按本期已过 {{stats.days}} 个自然日计算；历史周期按完整天数计算。</view>
+    <view wx:if="{{mode !== 'day'}}" class="panel"><view class="row"><text class="section-title">{{type === 'income' ? '收入' : '支出'}}趋势</text><text class="muted">峰值 ¥{{stats.peakText}}</text></view><scroll-view scroll-x class="chart-scroll"><view class="chart" style="width: {{chartWidth}}rpx;"><view wx:for="{{stats.bars}}" wx:key="start" class="bar-column" data-start="{{item.start}}" data-end="{{item.end}}" bindtap="barBills"><view class="bar-space"><view class="bar {{type === 'income' ? 'income-bar' : ''}}" style="height: {{item.height}}%;"></view></view><view class="bar-label">{{item.label}}</view></view></view></scroll-view><view class="note">点击柱子查看明细，左右滑动查看更多日期。</view></view>
+    <view class="panel"><view class="section-title">{{type === 'income' ? '收入来源' : '支出分类'}}</view><view wx:if="{{!stats.categories.length}}" class="empty">{{type === 'income' ? '本期暂无收入' : '本期暂无净支出'}}</view><view wx:for="{{stats.categories}}" wx:key="id" class="category-stat" bindtap="categoryBills" data-id="{{item.id}}"><view class="row"><view>{{item.icon}} {{item.name}} <text class="muted">{{item.percent}}%</text></view><text class="category-money">¥{{item.amountText}} ›</text></view><view class="progress stat-progress"><view class="progress-fill" style="width: {{item.width}}%; background: {{item.color}};"></view></view></view></view>
+    <view wx:if="{{stats.top.length}}" class="panel"><view class="section-title">本期大额{{type === 'income' ? '收入' : '支出'}}</view><view wx:for="{{stats.top}}" wx:key="id" class="row top-row" bindtap="select" data-id="{{item.id}}"><view class="top-description"><view>{{item.icon}} {{item.note || item.categoryName}}</view><view class="muted top-date">{{item.date}} · {{item.categoryName}}</view></view><text class="category-money {{type === 'income' ? 'income-text' : ''}}">{{item.sign}}¥{{item.amountText}}</text></view></view>
   </block>
 </view>

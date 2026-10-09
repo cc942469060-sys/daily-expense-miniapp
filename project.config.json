@@ -1,10 +1,40 @@
 {
-  "description": "小日账：个人消费记录与统计",
-  "miniprogramRoot": "miniprogram/",
-  "compileType": "miniprogram",
-  "appid": "touristappid",
+  "description": "小日账：个人收支记录与统计",
+  "miniprogramRoot": "miniprogram/",  "compileType": "miniprogram",
+  "appid": "wx422617780bbbaa86",
   "projectname": "daily-expense-miniapp",
-  "setting": { "es6": true, "enhance": true, "postcss": true, "minified": true, "urlCheck": true },
-  "packOptions": { "ignore": [], "include": [] },
-  "editorSetting": { "tabIndent": "insertSpaces", "tabSize": 2 }
+  "setting": {
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true,
+    "urlCheck": true,
+    "compileWorklet": false,
+    "uglifyFileName": false,
+    "uploadWithSourceMap": true,
+    "packNpmManually": false,
+    "packNpmRelationList": [],
+    "minifyWXSS": true,
+    "minifyWXML": true,
+    "localPlugins": false,
+    "disableUseStrict": false,
+    "useCompilerPlugins": false,
+    "condition": false,
+    "swc": false,
+    "disableSWC": true,
+    "babelSetting": {
+      "ignore": [],
+      "disablePlugins": [],
+      "outputPath": ""
+    }
+  },
+  "packOptions": {
+    "ignore": [],
+    "include": []
+  },
+  "editorSetting": {
+    "tabIndent": "insertSpaces",
+    "tabSize": 2
+  },
+  "simulatorPluginLibVersion": {}
 }

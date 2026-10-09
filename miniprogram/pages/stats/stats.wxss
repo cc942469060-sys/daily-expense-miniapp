@@ -17,3 +17,5 @@
 .top-row { padding-top: 26rpx; }
 .top-description { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .top-date { margin-top: 9rpx; }
+.income-bar { background: #CB9562; }
+.category-money { max-width: 50%; overflow-wrap: anywhere; text-align: right; }

@@ -7,4 +7,14 @@
 .category-icon { font-size: 42rpx; }
 .category-name { font-size: 23rpx; margin-top: 10rpx; overflow-wrap: anywhere; }
 .save-area { margin-top: 32rpx; }
+.save-area .primary, .save-area .secondary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 112rpx;
+  padding: 24rpx;
+  font-size: 32rpx;
+  line-height: 1.5;
+}
 .extra-button { margin-top: 18rpx; }
+.save-area .secondary { margin-top: 24rpx; }
