@@ -1,38 +1,15 @@
 const core = require('./core');
 const assets = require('./assets');
+const persistence = require('./ledger-storage');
 const KEY = 'daily-expense:state:v3'; const SAFETY_KEY = 'daily-expense:before-restore:v3';
 const V2_KEY = 'daily-expense:state:v2'; const V2_SAFETY_KEY = 'daily-expense:before-restore:v2';
 const LEGACY_KEY = 'daily-expense:state:v1'; const LEGACY_SAFETY_KEY = 'daily-expense:before-restore:v1';
 function missing(value) { return value === '' || value === undefined || value === null; }
 function read() {
-  let data; let legacy; let legacyVersion = 2;
-  try {
-    data = wx.getStorageSync(KEY);
-    if (missing(data)) {
-      legacy = wx.getStorageSync(V2_KEY);
-      if (missing(legacy)) { legacy = wx.getStorageSync(LEGACY_KEY); legacyVersion = 1; }
-    }
-  }
-  catch (e) { throw new Error('无法读取本地账本，请稍后重试'); }
-  if (!missing(data)) {
-    let upgraded;
-    try { if (data.version !== 3) throw new Error('数据版本无效'); upgraded = core.upgradeExpenseCategories(data); }
-    catch (e) { throw new Error('本地账本数据异常。请到「我的 → 导出与备份」恢复有效备份，原数据未被覆盖。'); }
-    return upgraded === data ? data : write(upgraded, false);
-  }
-  if (missing(legacy)) return write(core.freshState());
-  let migrated;
-  try {
-    if (legacy.version !== legacyVersion) throw new Error('旧版数据版本无效');
-    migrated = core.migrateState(legacy);
-  } catch (e) { throw new Error('旧版账本数据异常。请到「我的 → 导出与备份」恢复有效备份，原数据未被覆盖。'); }
-  try { return write(migrated, false); }
-  catch (e) { throw new Error('账本升级保存失败，原账本已保留。请清理设备存储空间后重试。'); }
+  return persistence.load().state;
 }
-function write(s, touch = true) {
-  core.validateState(s); if (touch) s.updatedAt = new Date().toISOString();
-  try { wx.setStorageSync(KEY, s); } catch (e) { throw new Error('保存失败：本地空间不足或存储不可用，请先导出备份'); }
-  return s;
+function write(s, touch = true, operation = 'save', recovering = false) {
+  return persistence.commit(s, touch, operation, recovering);
 }
 function saveRecord(input, recordId) {
   const s = read(); const prev = recordId ? s.records.find(r => r.id === recordId) : null;
@@ -74,24 +51,42 @@ function parseBackup(text) {
   return core.migrateState(data.state);
 }
 function backupText() { return JSON.stringify({ app: 'daily-expense-miniapp', version: 3, exportedAt: new Date().toISOString(), state: read() }, null, 2); }
+function prepareBackup() {
+  const loaded = persistence.load();
+  // Explicit export is a user action; persist before creating an external copy so
+  // that a first export cannot later look like an orphaned recovery file.
+  if (!loaded.raw || loaded.raw.version !== 3) write(loaded.state, false, 'prepare-backup');
+}
 function restore(s) {
   const next = core.migrateState(s);
-  let prev = wx.getStorageSync(KEY);
-  if (missing(prev)) prev = wx.getStorageSync(V2_KEY);
-  if (missing(prev)) prev = wx.getStorageSync(LEGACY_KEY);
-  try { wx.setStorageSync(SAFETY_KEY, missing(prev) ? core.freshState() : prev); }
+  let prev = persistence.get(KEY);
+  if (missing(prev)) prev = persistence.get(V2_KEY);
+  if (missing(prev)) prev = persistence.get(LEGACY_KEY);
+  // Never destroy a useful safety copy by replacing it with a fabricated empty state.
+  try {
+    if (!missing(prev)) {
+      wx.setStorageSync(SAFETY_KEY, prev);
+      if (JSON.stringify(persistence.get(SAFETY_KEY)) !== JSON.stringify(prev)) throw new Error('副本写入核验失败');
+    }
+  }
   catch (e) { throw new Error('无法创建恢复前副本，已取消恢复'); }
-  return write(next);
+  return write(next, true, 'restore', true);
 }
 function safetyData() {
-  let current = wx.getStorageSync(SAFETY_KEY);
-  if (missing(current)) current = wx.getStorageSync(V2_SAFETY_KEY);
-  return missing(current) ? wx.getStorageSync(LEGACY_SAFETY_KEY) : current;
+  let current = persistence.get(SAFETY_KEY);
+  if (missing(current)) current = persistence.get(V2_SAFETY_KEY);
+  return missing(current) ? persistence.get(LEGACY_SAFETY_KEY) : current;
 }
 function hasSafety() { return !missing(safetyData()); }
 function restoreSafety() {
   const s = safetyData(); if (missing(s)) throw new Error('没有恢复前副本');
-  return write(core.migrateState(s));
+  return restore(core.migrateState(s));
+}
+function recoveryCandidate(id) { const item = persistence.candidate(id); return Object.assign({}, item, { token: persistence.checksum(item.state) }); }
+function restoreCandidate(id, token) {
+  const item = recoveryCandidate(id);
+  if (item.token !== token) throw new Error('副本已变化，请重新检查并确认');
+  return restore(item.state);
 }
 function markBackup() { const s = read(); s.lastBackupAt = new Date().toISOString(); write(s); }
 function accountIn(s, accountId) {
@@ -160,4 +155,4 @@ function removeAssetCategory(categoryId, targetId) {
   s.accounts.forEach(a => { if (a.categoryId === categoryId) a.categoryId = targetId; });
   s.assetCategories = s.assetCategories.filter(c => c.id !== categoryId); write(s);
 }
-module.exports = { KEY, SAFETY_KEY, V2_KEY, V2_SAFETY_KEY, LEGACY_KEY, LEGACY_SAFETY_KEY, read, write, saveRecord, removeRecord, saveCategory, removeCategory, setBudget, parseBackup, backupText, restore, hasSafety, restoreSafety, markBackup, saveAccount, updateAccountValue, archiveAccount, removeAccount, setAssetAmountsHidden, saveAssetCategory, removeAssetCategory };
+module.exports = { KEY, SAFETY_KEY, V2_KEY, V2_SAFETY_KEY, LEGACY_KEY, LEGACY_SAFETY_KEY, read, write, saveRecord, removeRecord, saveCategory, removeCategory, setBudget, parseBackup, backupText, prepareBackup, restore, hasSafety, restoreSafety, markBackup, saveAccount, updateAccountValue, archiveAccount, removeAccount, setAssetAmountsHidden, saveAssetCategory, removeAssetCategory, protect: persistence.protect, diagnostics: persistence.diagnostics, protectionWarning: persistence.protectionWarning, recoveryCandidate, restoreCandidate };

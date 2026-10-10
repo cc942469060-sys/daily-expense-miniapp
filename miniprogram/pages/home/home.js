@@ -2,6 +2,7 @@ const store = require('../../utils/store'); const core = require('../../utils/co
 Page({
   data: { today: '', todayText: '0.00', monthText: '0.00', todaySummary: {}, monthSummary: {}, count: 0, groups: [], budget: 0, budgetPercent: 0, remainingText: '', overspent: false, storageError: '' },
   onShow() {
+    this.setData({ protectionWarning: store.protectionWarning() });
     try {
       const s = store.read(); const today = dates.dateKey(new Date());
       const day = core.filterRecords(s, { start: today, end: today }); const month = core.filterRecords(s, dates.range('month', today));

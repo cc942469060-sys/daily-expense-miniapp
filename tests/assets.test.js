@@ -21,10 +21,11 @@ function page(name, options) {
 test.beforeEach(() => {
   db = new Map(); failKey = ''; writes = 0; modals = []; navigation = []; confirm = true;
   global.wx = {
-    getStorageSync: key => clone(db.get(key)), setStorageSync: (key, s) => { if (key === failKey) throw new Error('full'); db.set(key, clone(s)); writes++; },
+    getStorageSync: key => clone(db.get(key)), setStorageSync: (key, s) => { if (key === failKey) throw new Error('full'); db.set(key, clone(s)); if (key === store.KEY) writes++; },
     showToast: () => {}, showModal: o => { modals.push(o); if (o.success) o.success({ confirm }); if (o.complete) o.complete(); },
     navigateTo: o => navigation.push(o.url), navigateBack: () => navigation.push('back'), setNavigationBarTitle: () => {}, pageScrollTo: () => {}
   };
+  require('./helpers/storage-io').installStorageIO(wx, db);
 });
 
 test('新账本有资产与负债预设、空账户和独立金额精度', () => {
@@ -48,7 +49,7 @@ test('汇总资产负债与负净资产，重名账户并存且与收支预算�
   assert.equal(core.summarize(after.records).expenseText, '15.00'); assert.equal(assets.summary(after).netCents, -5999000);
 });
 
-test('开户和更新金额各单次写入，资料修改不产生历史，同金额可刷新日期', () => {
+test('开户和更新金额各单次写入主账本，资料修改不产生历史，同金额可刷新日期', () => {
   store.read(); writes = 0; const a = store.saveAccount(input()); assert.equal(writes, 1);
   let s = store.read(); const first = s.accountValueHistory[0]; assert.equal(first.reason, 'opening'); assert.equal(first.previousCents, null); assert.equal(first.recordedAt, a.createdAt);
   store.saveAccount(input({ name: '招行工资卡', categoryId: 'asset_cash', amount: '999' }), a.id);
@@ -125,17 +126,18 @@ test('v3 校验拒绝孤立历史、重复ID、断链、跨类型、负数及金
   assert.deepEqual(store.read(), good);
 });
 
-test('v2 原账单和元数据无损升级，旧键保留并只迁移一次', () => {
+test('v2 读取只在内存中升级，首次保存才写入新键并保留旧键', () => {
   const old = oldV2(); db.set(store.V2_KEY, clone(old));
   const s = store.read(); assert.equal(s.version, 3); assert.deepEqual(s.records, old.records); assert.deepEqual(s.categories, old.categories);
   assert.equal(s.settings.budgetCents, old.settings.budgetCents); assert.equal(s.updatedAt, old.updatedAt); assert.equal(s.lastBackupAt, old.lastBackupAt);
-  assert.deepEqual(db.get(store.V2_KEY), old); assert.equal(writes, 1); assert.deepEqual(store.read(), s); assert.equal(writes, 1);
+  assert.deepEqual(db.get(store.V2_KEY), old); assert.equal(writes, 0); assert.deepEqual(store.read(), s); assert.equal(writes, 0);
+  store.write(s, false); assert.equal(writes, 1); assert.deepEqual(store.read(), s); assert.deepEqual(db.get(store.V2_KEY), old);
 });
 
 test('v2 升级失败不覆盖原数据，最新键损坏不回退到旧键', () => {
   const old = oldV2(); db.set(store.V2_KEY, old); failKey = store.KEY;
-  assert.throws(() => store.read(), /升级保存失败/); assert.deepEqual(db.get(store.V2_KEY), old); assert.ok(!db.has(store.KEY));
-  failKey = ''; store.read(); db.set(store.KEY, { bad: true }); assert.throws(() => store.read(), /数据异常/); assert.deepEqual(db.get(store.KEY), { bad: true });
+  assert.throws(() => store.write(store.read(), false), /保存失败/); assert.deepEqual(db.get(store.V2_KEY), old); assert.ok(!db.has(store.KEY));
+  failKey = ''; store.write(store.read(), false); db.set(store.KEY, { bad: true }); assert.throws(() => store.read(), /数据异常/); assert.deepEqual(db.get(store.KEY), { bad: true });
   db.delete(store.KEY); db.set(store.V2_KEY, { bad: true }); db.set(store.LEGACY_KEY, { version: 1 }); assert.throws(() => store.read(), /数据异常/); assert.ok(!db.has(store.KEY));
 });
 

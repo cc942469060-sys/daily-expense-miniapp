@@ -19,8 +19,9 @@ test.beforeEach(() => {
   db = new Map(); failWrite = false; writes = 0;
   global.wx = {
     getStorageSync: key => clone(db.get(key)),
-    setStorageSync: (key, value) => { if (failWrite) throw new Error('full'); writes++; db.set(key, clone(value)); }
+    setStorageSync: (key, value) => { if (failWrite) throw new Error('full'); if (key === store.KEY) writes++; db.set(key, clone(value)); }
   };
+  require('./helpers/storage-io').installStorageIO(wx, db);
 });
 
 test('六个新支出分类可记账，礼金与收入礼金分别统计', () => {
@@ -47,7 +48,8 @@ test('旧 v2 账本自动补齐一次，原记录、预算和时间保持不变'
   assert.equal(next.settings.budgetCents, old.settings.budgetCents);
   assert.equal(next.updatedAt, old.updatedAt); assert.equal(next.lastBackupAt, old.lastBackupAt);
   assert.equal(core.summarize(next.records).expenseText, '120.00');
-  assert.equal(writes, 1); assert.deepEqual(store.read(), next); assert.equal(writes, 1);
+  assert.equal(writes, 0); assert.deepEqual(store.read(), next); assert.equal(writes, 0);
+  store.write(next, false); assert.equal(writes, 1); assert.deepEqual(store.read(), next);
 });
 
 test('同名分类不重复，ID 冲突不覆盖旧分类或历史记录', () => {
@@ -75,8 +77,8 @@ test('升级后删除和改名不会被重启或备份恢复还原', () => {
 
 test('补齐写入失败保留旧数据，重试可以成功', () => {
   const old = previousState(); db.set(store.V2_KEY, clone(old)); failWrite = true;
-  assert.throws(() => store.read(), /保存失败/); assert.deepEqual(db.get(store.V2_KEY), old); assert.equal(db.has(store.KEY), false);
-  failWrite = false; assert.equal(store.read().categories.length, 22); assert.equal(writes, 1);
+  assert.throws(() => store.write(store.read(), false), /保存失败/); assert.deepEqual(db.get(store.V2_KEY), old); assert.equal(db.has(store.KEY), false);
+  failWrite = false; store.write(store.read(), false); assert.equal(store.read().categories.length, 22); assert.equal(writes, 1);
 });
 
 test('旧备份解析补齐但不写入，旧恢复前副本同样补齐', () => {

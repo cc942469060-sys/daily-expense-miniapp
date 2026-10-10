@@ -1,8 +1,15 @@
 const ui = require('./ui');
+let exportSequence = 0;
+function backupName() { return `xiaorizhang-backup-${Date.now()}-${++exportSequence}-${Math.random().toString(36).slice(2, 10)}.json`; }
 function writeFile(name, content) {
   return new Promise((resolve, reject) => {
     const path = `${wx.env.USER_DATA_PATH}/${name}`;
-    wx.getFileSystemManager().writeFile({ filePath: path, data: content, encoding: 'utf8', success: () => resolve(path), fail: () => reject(new Error('文件写入失败，请检查存储空间')) });
+    const fs = wx.getFileSystemManager();
+    if (/^xiaorizhang-backup-/.test(name)) {
+      try { if (fs.readdirSync(wx.env.USER_DATA_PATH).includes(name)) { reject(new Error('同名备份已存在，请重新导出，旧文件未覆盖')); return; } }
+      catch (e) { reject(new Error('无法检查已有备份，已取消导出')); return; }
+    }
+    fs.writeFile({ filePath: path, data: content, encoding: 'utf8', success: () => resolve(path), fail: () => reject(new Error('文件写入失败，请检查存储空间')) });
   });
 }
 function shareFile(path, name) {
@@ -20,4 +27,4 @@ function chooseBackup() {
     }, fail: e => /cancel/i.test(e.errMsg || '') ? resolve(null) : reject(new Error('选择文件失败，请在真机重试')) });
   });
 }
-module.exports = { writeFile, shareFile, chooseBackup };
+module.exports = { writeFile, shareFile, chooseBackup, backupName };

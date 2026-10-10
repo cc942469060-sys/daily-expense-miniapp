@@ -2,7 +2,7 @@ const test = require('node:test'); const assert = require('node:assert/strict');
 const input = { type:'expense', amount:'20.00', categoryId:'food', date:'2024-02-10', time:'12:00', payment:'微信', note:'午饭', refund:'0' };
 let data; let failKey;
 function clone(v) { return v === undefined ? '' : JSON.parse(JSON.stringify(v)); }
-test.beforeEach(()=>{ data = new Map(); failKey = ''; global.wx = { getStorageSync: key=>clone(data.get(key)), setStorageSync: (key,value)=>{ if (key === failKey) throw new Error('full'); data.set(key,clone(value)); } }; });
+test.beforeEach(()=>{ data = new Map(); failKey = ''; global.wx = { getStorageSync: key=>clone(data.get(key)), setStorageSync: (key,value)=>{ if (key === failKey) throw new Error('full'); data.set(key,clone(value)); } }; require('./helpers/storage-io').installStorageIO(wx, data); });
 test('初始化为空账本，增改删记录后重新读取保持一致',()=>{ assert.equal(store.read().records.length,0); const r = store.saveRecord(input); assert.equal(store.read().records.length,1); store.saveRecord({...input,amount:'35.00'},r.id); assert.equal(store.read().records[0].amountCents,3500); store.removeRecord(r.id); assert.equal(store.read().records.length,0); });
 test('写入失败不会覆盖上一次成功保存的数据',()=>{ const r = store.saveRecord(input); failKey = store.KEY; assert.throws(()=>store.saveRecord({...input,amount:'88.00'},r.id),/保存失败/); assert.equal(store.read().records[0].amountCents,2000); });
 test('损坏的本地数据不会被当作空账本覆盖',()=>{ data.set(store.KEY,{corrupted:true}); assert.throws(()=>store.read(),/原数据未被覆盖/); assert.deepEqual(data.get(store.KEY),{corrupted:true}); });

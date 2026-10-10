@@ -36,6 +36,7 @@ test.beforeEach(() => {
     navigateBack: () => navigation.push('back'), navigateTo: options => navigation.push(options.url),
     setNavigationBarTitle: () => {}, pageScrollTo: () => {}
   };
+  require('./helpers/storage-io').installStorageIO(wx, db);
 });
 
 test('混合收支汇总、分类占比和趋势按类型计算', () => {
@@ -83,7 +84,7 @@ test('报销按到账月增加收入，退款继续扣原支出月', () => {
 });
 
 test('收入退款、跨类型分类、非法或缺失类型被拒绝且不写入', () => {
-  store.read(); const before = clone(db.get(store.KEY));
+  store.read(); const before = db.get(store.KEY);
   for (const bad of [income({ refund: '1' }), income({ categoryId: 'food' }), input({ type: undefined }), input({ type: 'transfer' })]) {
     assert.throws(() => store.saveRecord(bad));
     assert.deepEqual(db.get(store.KEY), before);
@@ -142,7 +143,7 @@ test('旧版满 40 个分类并与默认收入 ID 冲突仍能迁移', () => {
 
 test('迁移写入失败保留旧账本，重试成功；损坏数据不被空账本覆盖', () => {
   const old = legacy(); db.set(store.LEGACY_KEY, clone(old)); failKey = store.KEY;
-  assert.throws(() => store.read(), /升级保存失败/);
+  assert.throws(() => store.write(store.read(), false), /保存失败/);
   assert.deepEqual(db.get(store.LEGACY_KEY), old); assert.equal(db.has(store.KEY), false);
   failKey = ''; assert.equal(store.read().records.length, 1);
   db.set(store.KEY, { bad: true });

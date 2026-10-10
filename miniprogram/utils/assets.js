@@ -20,9 +20,10 @@ function money(cents) { return (cents / 100).toFixed(2); }
 function validId(v) { return typeof v === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test(v); }
 function validCents(v) { return Number.isSafeInteger(v) && v >= 0 && v <= MAX_CENTS; }
 function timestamp(v) { return Number.isSafeInteger(v) && v >= 0; }
-function checkDate(value) {
+function checkDate(value, entering = true) {
   dates.parseDate(value);
-  if (value < '2000-01-01' || value > dates.dateKey(new Date())) throw new Error('金额日期须在 2000 年起至今天之间');
+  if (value < '2000-01-01' || value > '2100-12-31') throw new Error('金额日期超出支持范围');
+  if (entering && value > dates.dateKey(new Date())) throw new Error('金额日期须在 2000 年起至今天之间');
 }
 function amountToCents(value) {
   const raw = String(value).trim();
@@ -48,13 +49,13 @@ function validateState(s) {
     const c = a && cats.get(a.categoryId);
     if (!a || !validId(a.id) || accounts.has(a.id) || !KINDS.includes(a.kind) || !c || c.kind !== a.kind || typeof a.name !== 'string' || !a.name.trim() || a.name.length > 24 || !validCents(a.amountCents) || typeof a.note !== 'string' || a.note.length > 200 || typeof a.cardLast4 !== 'string' || !/^(\d{4})?$/.test(a.cardLast4) || !timestamp(a.createdAt) || !timestamp(a.updatedAt) || a.updatedAt < a.createdAt || !(a.archivedAt === null || timestamp(a.archivedAt))) throw new Error('资产账户数据无效');
     if (a.archivedAt !== null && (a.amountCents !== 0 || a.archivedAt < a.createdAt || a.archivedAt > a.updatedAt)) throw new Error('归档账户必须为零余额且归档时间有效');
-    checkDate(a.valuedOn); accounts.set(a.id, a);
+    checkDate(a.valuedOn, false); accounts.set(a.id, a);
   });
   const latest = new Map(); const ids = new Set();
   s.accountValueHistory.forEach(h => {
     const a = h && accounts.get(h.accountId); const prev = h && latest.get(h.accountId);
     if (!h || !a || !validId(h.id) || ids.has(h.id) || !validCents(h.amountCents) || !timestamp(h.recordedAt) || h.recordedAt < a.createdAt || h.recordedAt > a.updatedAt || typeof h.note !== 'string' || h.note.length > 200) throw new Error('资产金额历史无效');
-    checkDate(h.valuedOn);
+    checkDate(h.valuedOn, false);
     if (!prev) {
       if (h.reason !== 'opening' || h.previousCents !== null || h.recordedAt !== a.createdAt) throw new Error('账户缺少有效的初始金额');
     } else if (h.reason !== 'manual_update' || h.previousCents !== prev.amountCents || h.valuedOn < prev.valuedOn || h.recordedAt < prev.recordedAt) throw new Error('资产金额历史不连续');

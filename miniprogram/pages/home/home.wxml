@@ -1,5 +1,6 @@
 <view class="page">
   <view class="row"><view><view class="title">把日子，记清楚。</view><view class="subtitle">小日账 · {{today}}</view></view><text class="plant">🌿</text></view>
+  <view wx:if="{{protectionWarning}}" class="error" bindtap="backup">{{protectionWarning}}<view class="link">检查本地副本 ›</view></view>
   <view wx:if="{{storageError}}" class="error" bindtap="backup">{{storageError}}<view class="link">前往恢复备份 ›</view></view>
   <block wx:else>
     <view class="panel hero">
