@@ -1,9 +1,15 @@
 .period-tabs { display: flex; padding: 8rpx; margin-top: 30rpx; background: #E9EDE5; border-radius: 22rpx; }
-.period-tab { flex: 1; text-align: center; padding: 18rpx; color: #7B897F; border-radius: 16rpx; }
+.period-tab { flex: 1; min-width: 0; text-align: center; padding: 18rpx 6rpx; color: #7B897F; border-radius: 16rpx; font-size: 26rpx; white-space: nowrap; }
 .period-tab.selected { background: #FFF; color: #22684C; font-weight: 650; }
 .period-switch { margin-top: 24rpx; gap: 12rpx; }
 .period-label { font-weight: 600; font-size: 25rpx; text-align: center; }
 .back-current { text-align: center; color: #7B897F; font-size: 22rpx; padding: 18rpx; }
+.custom-range { gap: 16rpx; margin-top: 24rpx; }
+.custom-range picker { flex: 1; min-width: 0; }
+.range-date { padding: 18rpx 8rpx; background: #FFF; border-radius: 16rpx; text-align: center; font-size: 25rpx; font-weight: 600; }
+.range-date .muted { margin-bottom: 10rpx; font-weight: 400; }
+.range-note { text-align: center; color: #7B897F; font-size: 22rpx; padding: 18rpx 0; }
+.all-range { margin-top: 28rpx; }
 .refund-note { color: #C5D8CC; font-size: 23rpx; margin-top: 24rpx; }
 .chart-scroll { width: 100%; margin-top: 28rpx; }
 .chart { display: flex; height: 280rpx; }

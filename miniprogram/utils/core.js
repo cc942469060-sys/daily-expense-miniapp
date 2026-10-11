@@ -126,9 +126,42 @@ function groups(state, records, fullRecords, type) {
   });
   return result;
 }
-function statistics(state, mode, anchor, today, type = 'expense') {
+function statisticsBounds(state, mode, anchor, today, customRange) {
+  if (mode === 'all') {
+    return state.records.reduce((bounds, r) => ({ start: r.date < bounds.start ? r.date : bounds.start, end: r.date > bounds.end ? r.date : bounds.end }), { start: today, end: today });
+  }
+  if (mode !== 'custom') return dates.range(mode, anchor);
+  const { start, end } = customRange || {};
+  dates.parseDate(start); dates.parseDate(end);
+  if (start < '2000-01-01' || end > today) throw new Error('请选择 2000 年起至今天的日期');
+  if (start > end) throw new Error('开始日期不能晚于结束日期');
+  return { start, end };
+}
+function statisticsBars(records, mode, bounds) {
+  const extended = mode === 'all' || mode === 'custom';
+  const months = (Number(bounds.end.slice(0, 4)) - Number(bounds.start.slice(0, 4))) * 12 + Number(bounds.end.slice(5, 7)) - Number(bounds.start.slice(5, 7)) + 1;
+  const granularity = extended ? (dates.dayCount(bounds.start, bounds.end) <= 62 ? 'day' : months <= 24 ? 'month' : 'year') : mode === 'year' ? 'month' : 'day';
+  const keyLength = { day: 10, month: 7, year: 4 }[granularity]; const totals = new Map();
+  records.forEach(r => { const key = r.date.slice(0, keyLength); totals.set(key, (totals.get(key) || 0) + net(r)); });
+  const bars = [];
+  for (let cursor = bounds.start; cursor <= bounds.end;) {
+    const period = dates.range(granularity, cursor);
+    const start = period.start < bounds.start ? bounds.start : period.start;
+    const end = period.end > bounds.end ? bounds.end : period.end;
+    let label;
+    if (granularity === 'year') label = cursor.slice(0, 4) + '年';
+    else if (granularity === 'month') label = extended ? cursor.slice(0, 7) : Number(cursor.slice(5, 7)) + '月';
+    else if (mode === 'week') label = ['日', '一', '二', '三', '四', '五', '六'][dates.parseDate(cursor).getDay()];
+    else label = extended ? cursor.slice(5).replace('-', '/') : String(Number(cursor.slice(8)));
+    bars.push({ label, cents: totals.get(cursor.slice(0, keyLength)) || 0, start, end });
+    if (end === bounds.end) break;
+    cursor = dates.shiftDays(end, 1);
+  }
+  return { bars, granularity };
+}
+function statistics(state, mode, anchor, today, type = 'expense', customRange) {
   if (!TYPES.includes(type)) throw new Error('收支类型无效');
-  const bounds = dates.range(mode, anchor); const all = filterRecords(state, bounds);
+  const bounds = statisticsBounds(state, mode, anchor, today, customRange); const all = filterRecords(state, bounds);
   const records = all.filter(r => r.type === type); const sum = total(records, type); const summary = summarize(all);
   const gross = records.reduce((s, r) => s + r.amountCents, 0); const refunded = gross - sum;
   const effectiveEnd = bounds.end > today ? today : bounds.end;
@@ -137,22 +170,12 @@ function statistics(state, mode, anchor, today, type = 'expense') {
     const cents = total(records.filter(r => r.categoryId === c.id), type);
     return Object.assign({}, c, { cents, amountText: money(cents), percent: sum ? (cents / sum * 100).toFixed(1) : '0.0', width: sum ? Math.round(cents / sum * 100) : 0 });
   }).filter(c => c.cents > 0).sort((a, b) => b.cents - a.cents);
-  const bars = [];
-  if (mode === 'year') {
-    for (let i = 1; i <= 12; i++) {
-      const month = anchor.slice(0, 4) + '-' + String(i).padStart(2, '0'); const r = dates.range('month', month + '-01');
-      bars.push({ label: i + '月', cents: total(records.filter(r => r.date.slice(0, 7) === month), type), start: r.start, end: r.end });
-    }
-  } else {
-    for (let value = bounds.start; value <= bounds.end; value = dates.shiftDays(value, 1)) {
-      bars.push({ label: mode === 'week' ? ['日', '一', '二', '三', '四', '五', '六'][dates.parseDate(value).getDay()] : String(Number(value.slice(8))), cents: total(records.filter(r => r.date === value), type), start: value, end: value });
-      if (value === bounds.end) break;
-    }
-  }
+  const { bars, granularity } = statisticsBars(records, mode, bounds);
   const peak = Math.max(1, ...bars.map(b => b.cents));
   bars.forEach(b => { b.height = b.cents ? Math.max(3, Math.round(b.cents / peak * 100)) : 0; b.amountText = money(b.cents); });
   const top = records.slice().sort((a, b) => net(b) - net(a)).slice(0, 3).map(r => decorate(state, r));
-  return { type, summary, start: bounds.start, end: bounds.end, label: dates.periodLabel(mode, anchor), totalText: money(sum), grossText: money(gross), refundText: money(refunded), refundCents: refunded, count: records.length, averageText: money(Math.round(sum / days)), maxText: top.length ? top[0].amountText : '0.00', days, categories, bars, peakText: money(!sum ? 0 : peak), top };
+  const label = mode === 'all' || mode === 'custom' ? bounds.start.replace(/-/g, '/') + ' — ' + bounds.end.replace(/-/g, '/') : dates.periodLabel(mode, anchor);
+  return { type, summary, start: bounds.start, end: bounds.end, label, granularity, granularityLabel: { day: '按日汇总', month: '按月汇总', year: '按年汇总' }[granularity], totalText: money(sum), grossText: money(gross), refundText: money(refunded), refundCents: refunded, count: records.length, averageText: money(Math.round(sum / days)), maxText: top.length ? top[0].amountText : '0.00', days, categories, bars, peakText: money(!sum ? 0 : peak), top };
 }
 function createRecord(state, input, previous) {
   const now = Date.now(); const type = input.type;
