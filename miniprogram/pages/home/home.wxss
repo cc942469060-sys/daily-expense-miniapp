@@ -1,3 +1,4 @@
 .plant { font-size: 58rpx; }
 .recent-heading { margin-top: 30rpx; }
 .budget-progress { margin-top: 22rpx; }
+.load-more { margin-top: 28rpx; }

@@ -20,8 +20,10 @@
     <button class="primary add-button" bindtap="add">＋ 记一笔</button>
     <view wx:if="{{budget}}" class="panel"><view class="row"><text class="section-title">本月支出预算</text><text class="muted">{{overspent ? '已超出' : '还可花'}} ¥{{remainingText}}</text></view><view class="progress budget-progress"><view class="progress-fill" style="width: {{budgetPercent}}%;"></view></view><view class="note">按净支出计算，收入不抵扣预算用量。</view></view>
     <view class="note">结余 = 收入 − 净支出。退款扣减原支出日期，结余不代表账户余额。</view>
-    <view class="row recent-heading"><text class="section-title">最近记录</text><text class="link" bindtap="allBills">全部账单 ›</text></view>
-    <bill-list groups="{{groups}}" bind:select="select" />
-    <view class="note" wx:if="{{groups.length}}">显示最近 8 笔，日期小计包含当天全部记录。点击记录可编辑，支出详情可登记退款。</view>
+    <view class="row recent-heading"><text class="section-title">近 30 天记录</text><text class="link" bindtap="allBills">全部账单 ›</text></view>
+    <view class="note">{{recentStart}} 至 {{today}}（含今天），共 {{recentCount}} 笔。</view>
+    <bill-list groups="{{groups}}" empty-text="近 30 天暂无记录，可在全部账单中查看历史记录" bind:select="select" />
+    <button wx:if="{{recentHasMore}}" class="secondary load-more" bindtap="moreRecent">加载更多（已显示 {{recentShown}} / {{recentCount}} 笔）</button>
+    <view class="note" wx:if="{{groups.length}}">日期小计包含当天全部记录。点击记录可编辑，支出详情可登记退款。</view>
   </block>
 </view>

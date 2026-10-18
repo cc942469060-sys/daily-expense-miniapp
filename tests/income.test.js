@@ -260,7 +260,7 @@ test('记账切换类型分别使用最近分类方式，连续记收入保留�
 
 test('明细切换类型清理分类和分页，混合日小计不受分页截断', () => {
   const s = store.read();
-  s.records = Array.from({ length: 120 }, (_, i) => core.createRecord(s, i % 2 ? income({ amount: '2' }) : input({ amount: '1' })));
+  s.records = Array.from({ length: 120 }, (_, i) => core.createRecord(s, Object.assign(i % 2 ? income({ amount: '2' }) : input({ amount: '1' }), { date: dates.dateKey(new Date()) })));
   store.write(s);
   const bills = page('bills'); bills.onLoad({}); bills.onShow();
   assert.equal(bills.data.shown, 100); assert.equal(bills.data.groups[0].incomeText, '120.00');
@@ -271,7 +271,7 @@ test('明细切换类型清理分类和分页，混合日小计不受分页截�
   assert.equal(bills.data.count, 60); assert.equal(bills.data.groups[0].summaryText, '收入 ¥120.00');
   assert.ok(bills.data.categories.every(c => c.type === 'income'));
   bills.clear(); assert.equal(bills.data.type, ''); assert.equal(bills.data.count, 120);
-  const home = page('home'); home.onShow(); assert.equal(home.data.groups[0].records.length, 8);
+  const home = page('home'); home.onShow(); assert.equal(home.data.groups[0].records.length, 100);
   assert.equal(home.data.groups[0].incomeText, '120.00');
 });
 
