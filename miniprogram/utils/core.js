@@ -104,7 +104,11 @@ function filterRecords(state, filter) {
   const f = filter || {}; const query = String(f.query || '').trim().toLowerCase();
   const cats = {}; state.categories.forEach(c => { cats[c.id] = c; });
   return state.records.filter(r => (!f.type || r.type === f.type) && (!f.start || r.date >= f.start) && (!f.end || r.date <= f.end) && (!f.categoryId || r.categoryId === f.categoryId) && (!f.payment || r.payment === f.payment) && (!query || (r.note + ' ' + cats[r.categoryId].name).toLowerCase().includes(query)))
-    .sort((a, b) => (b.date + ' ' + b.time).localeCompare(a.date + ' ' + a.time) || b.createdAt - a.createdAt);
+    .sort((a, b) => {
+      const amountOrder = f.sort === 'amount_desc' ? net(b) - net(a) : f.sort === 'amount_asc' ? net(a) - net(b) : 0;
+      const timeOrder = (b.date + ' ' + b.time).localeCompare(a.date + ' ' + a.time) || b.createdAt - a.createdAt;
+      return amountOrder || timeOrder || (f.sort === 'amount_desc' || f.sort === 'amount_asc' ? a.id.localeCompare(b.id) : 0);
+    });
 }
 function decorate(state, r) {
   const c = state.categories.find(c => c.id === r.categoryId); const cents = net(r);
