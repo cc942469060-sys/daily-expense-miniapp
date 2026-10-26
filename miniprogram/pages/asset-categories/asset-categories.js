@@ -21,9 +21,14 @@ Page({
   targetChange(e) { this.setData({ targetIndex: Number(e.detail.value) }); },
   cancelRemove() { this.setData({ deletingId: '' }); },
   remove() {
-    const target = this.data.targets[this.data.targetIndex]; if (!target) return;
-    wx.showModal({ title: '删除资产分类？', content: `此分类下的全部账户（含归档账户）将迁移到「${target.name}」，金额和历史记录保持不变。`, confirmText: '迁移并删除', success: r => {
-      if (r.confirm) ui.run(() => { store.removeAssetCategory(this.data.deletingId, target.id); this.cancel(); this.refresh(); ui.toast('分类已删除'); });
-    } });
+    ui.run(() => {
+      const categoryId = this.data.deletingId;
+      const category = this.data.categories.find(c => c.id === categoryId);
+      const target = this.data.targets[this.data.targetIndex];
+      if (!category || !target || target.id === categoryId || target.kind !== category.kind) throw new Error('请选择有效的同类型迁移分类后重试');
+      wx.showModal({ title: '删除资产分类？', content: `此分类下的全部账户（含归档账户）将迁移到「${target.name}」，金额和历史记录保持不变。`, confirmText: '确认删除', success: r => {
+        if (r.confirm) ui.run(() => { store.removeAssetCategory(categoryId, target.id); this.cancel(); this.refresh(); ui.toast('分类已删除'); });
+      }, fail: () => wx.showToast({ title: '无法弹出确认框，请重试', icon: 'none' }) });
+    });
   }
 });

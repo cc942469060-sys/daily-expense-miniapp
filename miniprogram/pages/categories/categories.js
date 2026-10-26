@@ -18,9 +18,14 @@ Page({
   targetChange(e) { this.setData({ targetIndex: Number(e.detail.value) }); },
   cancelRemove() { this.setData({ deletingId: '' }); },
   remove() {
-    const target = this.data.targets[this.data.targetIndex];
-    wx.showModal({ title: '删除分类？', content: `此分类下的历史账单将迁移到「${target.name}」，账单金额保持不变。`, confirmText: '迁移并删除', success: res => {
-      if (res.confirm) ui.run(() => { store.removeCategory(this.data.deletingId, target.id); this.cancel(); this.refresh(); ui.toast('分类已删除'); });
-    } });
+    ui.run(() => {
+      const categoryId = this.data.deletingId;
+      const category = this.data.categories.find(c => c.id === categoryId);
+      const target = this.data.targets[this.data.targetIndex];
+      if (!category || !target || target.id === categoryId || target.type !== category.type) throw new Error('请选择有效的同类型迁移分类后重试');
+      wx.showModal({ title: '删除分类？', content: `此分类下的历史账单将迁移到「${target.name}」，账单金额保持不变。`, confirmText: '确认删除', success: res => {
+        if (res.confirm) ui.run(() => { store.removeCategory(categoryId, target.id); this.cancel(); this.refresh(); ui.toast('分类已删除'); });
+      }, fail: () => wx.showToast({ title: '无法弹出确认框，请重试', icon: 'none' }) });
+    });
   }
 });
