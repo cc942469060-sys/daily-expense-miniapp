@@ -4,6 +4,7 @@ function installStorageIO(wx, db) {
   wx.getStorageInfoSync = () => ({ keys: [...db.keys()], currentSize: 1, limitSize: 10240 });
   wx.env = { USER_DATA_PATH: root };
   const fs = {
+    statSync: p => { if (!files.has(p)) throw new Error('ENOENT'); return { size: Buffer.byteLength(files.get(p)), isFile: () => true }; },
     readdirSync: () => [...files.keys()].filter(p => p.startsWith(root + '/')).map(p => p.slice(root.length + 1)),
     readFileSync: p => { if (!files.has(p)) throw new Error('ENOENT'); return files.get(p); },
     writeFileSync: (p, value) => { files.set(p, value); },

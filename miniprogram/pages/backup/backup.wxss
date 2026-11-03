@@ -1,2 +1,6 @@
 .action { margin-top: 24rpx; }
 .candidate { margin-top: 24rpx; padding-top: 20rpx; border-top: 1rpx solid #e3e8df; }
+
+.fold-button { margin: 0; width: 100%; text-align: left; font-size: 28rpx; }
+.file-name { overflow-wrap: anywhere; word-break: break-all; }
+.recovery-hint { font-size: 25rpx; color: #9B553D; margin-top: 16rpx; }

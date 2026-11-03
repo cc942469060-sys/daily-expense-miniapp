@@ -1,7 +1,14 @@
 const store = require('../../utils/store'); const core = require('../../utils/core'); const dates = require('../../utils/date'); const files = require('../../utils/files'); const ui = require('../../utils/ui');
 const assets = require('../../utils/assets');
+function isManualExport(item) { return /^file:xiaorizhang-backup(?:-[a-zA-Z0-9-]+)?\.json$/.test(item.id); }
+function exportTime(item) {
+  const timestamp = Date.parse(item.savedAt || '');
+  if (Number.isFinite(timestamp)) return timestamp;
+  const match = item.id.match(/^file:xiaorizhang-backup-(\d+)-/);
+  return match ? Number(match[1]) : 0;
+}
 Page({
-  data: { count: 0, accountCount: 0, backupTime: '尚未成功发送备份', busy: false, storageError: '', fileName: '', hasSafety: false, inspected: false, candidates: [], diagnosticText: '', protectionWarning: '' },
+  data: { count: 0, accountCount: 0, backupTime: '尚未成功发送备份', busy: false, storageError: '', fileName: '', pendingId: '', sendFileType: '', sendStatus: '', sendError: '', latestExport: null, historyExports: [], recoveryCopies: [], historyOpen: false, recoveryOpen: false, hasSafety: false, inspected: false, candidates: [], diagnosticText: '', protectionWarning: '' },
   onShow() { this.refresh(); },
   refresh() {
     try {
@@ -13,7 +20,26 @@ Page({
   },
   inspectLocal() {
     const report = store.diagnostics();
-    this.setData({ inspected: true, candidates: report.candidates.filter(item => item.id !== store.KEY), diagnosticText: JSON.stringify(report, null, 2), protectionWarning: store.protectionWarning() });
+    if (this.lastSendDiagnostic) report.fileSend = this.lastSendDiagnostic;
+    const candidates = report.candidates.filter(item => item.id !== store.KEY);
+    const manual = candidates.filter(isManualExport).map(item => Object.assign({}, item, { fileName: item.id.slice(5) }))
+      .sort((a, b) => exportTime(b) - exportTime(a) || b.id.localeCompare(a.id));
+    this.setData({ inspected: true, candidates, latestExport: manual[0] || null, historyExports: manual.slice(1), recoveryCopies: candidates.filter(item => !isManualExport(item)), diagnosticText: JSON.stringify(report, null, 2), protectionWarning: store.protectionWarning() });
+  },
+  toggleHistory() { this.setData({ historyOpen: !this.data.historyOpen }); },
+  toggleRecovery() { this.setData({ recoveryOpen: !this.data.recoveryOpen }); },
+  sendExport(e) {
+    if (this.data.busy) return;
+    return ui.run(() => {
+      const id = e.currentTarget.dataset.id;
+      if (!this.data.candidates.some(item => item.id === id && item.valid && isManualExport(item))) throw new Error('请选择有效的导出文件');
+      // Synchronous validation and native sending preserve the user's tap.
+      store.recoveryCandidate(id);
+      const name = id.slice(5);
+      this.pendingFile = { path: wx.env.USER_DATA_PATH + '/' + name, name, type: 'candidate' };
+      this.setData({ fileName: name, pendingId: id, sendFileType: 'candidate' });
+      return this.sendGenerated();
+    });
   },
   copyDiagnostics() {
     this.inspectLocal();
@@ -25,8 +51,7 @@ Page({
       const item = store.recoveryCandidate(e.currentTarget.dataset.id);
       const name = files.backupName();
       const content = JSON.stringify({ app: 'daily-expense-miniapp', version: 3, exportedAt: new Date().toISOString(), state: item.state }, null, 2);
-      const path = await files.writeFile(name, content); this.setData({ fileName: name });
-      await files.shareFile(path, name);
+      const path = await files.writeFile(name, content); this.readyToSend(path, name, 'candidate');
     } catch (e) { ui.error(e); } finally { this.setData({ busy: false }); this.inspectLocal(); }
   },
   async recoverCandidate(e) {
@@ -46,9 +71,38 @@ Page({
       if (type === 'json') store.prepareBackup();
       const name = type === 'csv' ? 'xiaorizhang-bills.csv' : type === 'assets' ? 'xiaorizhang-assets.csv' : files.backupName();
       const content = type === 'csv' ? core.csv(store.read()) : type === 'assets' ? assets.csv(store.read()) : store.backupText();
-      const path = await files.writeFile(name, content); this.setData({ fileName: name });
-      if (await files.shareFile(path, name)) { if (type === 'json') store.markBackup(); this.refresh(); ui.toast('文件已发送'); }
+      const path = await files.writeFile(name, content); this.readyToSend(path, name, type, type === 'json' ? JSON.parse(content).state.updatedAt : '');
     } catch (e) { ui.error(e); } finally { this.setData({ busy: false }); }
+  },
+  readyToSend(path, name, type, updatedAt) {
+    this.pendingFile = { path, name, type, updatedAt };
+    this.setData({ fileName: name, pendingId: 'file:' + name, sendFileType: type, sendStatus: '文件已生成，请点击下方按钮发送。', sendError: '' });
+    this.inspectLocal();
+    if (wx.pageScrollTo) wx.pageScrollTo({ scrollTop: 0, duration: 200 });
+  },
+  sendGenerated() {
+    if (this.data.busy || !this.pendingFile) return;
+    const file = this.pendingFile;
+    this.setData({ busy: true, sendStatus: '正在发送…', sendError: '' });
+    return files.shareFile(file.path, file.name).then(result => {
+      this.lastSendDiagnostic = { time: new Date().toISOString(), type: file.type, status: result.status, stage: result.stage || '', error: result.error || '' };
+      if (result.status === 'sent') {
+        let status = '文件已发送，请在聊天中妥善保存。';
+        if (file.type === 'json') {
+          try {
+            if (store.read().updatedAt === file.updatedAt) store.markBackup();
+            else status = '已发送生成时的备份；账本已有更新，请重新生成最新备份。';
+          } catch (e) { status = '文件已发送，但备份时间未能更新：' + e.message; }
+        }
+        this.setData({ sendStatus: status }); this.refresh();
+      } else if (result.status === 'cancelled') this.setData({ sendStatus: '已取消发送，文件保留，可再次点击发送。' });
+      else {
+        const hint = result.stage === 'file' ? '文件无法读取，请重新生成后发送。' : /TAP|gesture/i.test(result.error) ? '微信要求由点击直接发起发送，请再次点击发送按钮。' : '发送失败，文件保留。可重试发送或复制诊断摘要。';
+        this.setData({ sendStatus: hint, sendError: result.error });
+      }
+    }).catch(e => {
+      this.setData({ sendStatus: '发送结果处理异常，请先检查聊天中是否收到文件。', sendError: e.message });
+    }).finally(() => { this.setData({ busy: false }); this.inspectLocal(); });
   },
   async importJson() {
     if (this.data.busy) return; this.setData({ busy: true });

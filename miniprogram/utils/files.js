@@ -1,4 +1,3 @@
-const ui = require('./ui');
 let exportSequence = 0;
 function backupName() { return `xiaorizhang-backup-${Date.now()}-${++exportSequence}-${Math.random().toString(36).slice(2, 10)}.json`; }
 function writeFile(name, content) {
@@ -14,8 +13,19 @@ function writeFile(name, content) {
 }
 function shareFile(path, name) {
   return new Promise(resolve => {
-    if (!wx.shareFileMessage) { wx.showModal({ title: '文件已生成', content: '当前环境不支持发送文件，请使用较新版本微信真机操作。开发者工具可在文件系统中查看文件。', showCancel: false }); resolve(false); return; }
-    wx.shareFileMessage({ filePath: path, fileName: name, success: () => resolve(true), fail: e => { if (!/cancel/i.test(e.errMsg || '')) ui.error(new Error('文件已生成，但发送失败。请在真机重试导出。')); resolve(false); } });
+    const fail = (e, stage) => {
+      const error = String(e && (e.errMsg || e.message) || '未知错误').split(path).join('[本地文件]').slice(0, 500);
+      resolve({ status: /cancel/i.test(error) ? 'cancelled' : 'failed', stage, error });
+    };
+    try {
+      const stat = wx.getFileSystemManager().statSync(path);
+      if (!stat.isFile() || stat.size <= 0) throw new Error('文件为空或不是有效文件，请重新生成');
+    } catch (e) { fail(e, 'file'); return; }
+    if (typeof wx.shareFileMessage !== 'function') { fail(new Error('当前微信环境不支持文件发送，请升级微信后重试'), 'support'); return; }
+    // Keep the native call in the tap handler's synchronous call stack.
+    // Do not await file generation, access checks or a dialog before this call.
+    try { wx.shareFileMessage({ filePath: path, fileName: name, success: () => resolve({ status: 'sent' }), fail: e => fail(e, 'share') }); }
+    catch (e) { fail(e, 'share'); }
   });
 }
 function chooseBackup() {

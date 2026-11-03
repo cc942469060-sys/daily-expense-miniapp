@@ -225,6 +225,6 @@ test('恢复旧备份明确提示清空资产，取消保持全部数据，确�
 
 test('资产清单导出独立文件，成功发送不改变完整备份时间', async () => {
   store.saveAccount(input()); let filename; let content; wx.env = { USER_DATA_PATH: '/sandbox' };
-  wx.getFileSystemManager = () => ({ writeFile: o => { content = o.data; o.success(); } }); wx.shareFileMessage = o => { filename = o.fileName; o.success(); };
-  const p = page('backup'); await p.exportFile('assets'); assert.equal(filename, 'xiaorizhang-assets.csv'); assert.match(content, /工资卡/); assert.equal(store.read().lastBackupAt, ''); assert.equal(p.data.busy, false);
+  const fs = wx.getFileSystemManager(); const write = fs.writeFile; fs.writeFile = o => { content = o.data; write(o); }; wx.shareFileMessage = o => { filename = o.fileName; o.success(); };
+  const p = page('backup'); await p.exportFile('assets'); await p.sendGenerated(); assert.equal(filename, 'xiaorizhang-assets.csv'); assert.match(content, /工资卡/); assert.equal(store.read().lastBackupAt, ''); assert.equal(p.data.busy, false);
 });
