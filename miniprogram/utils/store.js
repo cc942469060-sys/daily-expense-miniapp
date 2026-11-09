@@ -80,7 +80,8 @@ function safetyData() {
 function hasSafety() { return !missing(safetyData()); }
 function restoreSafety() {
   const s = safetyData(); if (missing(s)) throw new Error('没有恢复前副本');
-  return restore(core.migrateState(s));
+  // The copy is either a legacy single-object ledger or an index of shared chunks.
+  return restore(persistence.resolve(s));
 }
 function recoveryCandidate(id) { const item = persistence.candidate(id); return Object.assign({}, item, { token: persistence.checksum(item.state) }); }
 function restoreCandidate(id, token) {
@@ -155,4 +156,4 @@ function removeAssetCategory(categoryId, targetId) {
   s.accounts.forEach(a => { if (a.categoryId === categoryId) a.categoryId = targetId; });
   s.assetCategories = s.assetCategories.filter(c => c.id !== categoryId); write(s);
 }
-module.exports = { KEY, SAFETY_KEY, V2_KEY, V2_SAFETY_KEY, LEGACY_KEY, LEGACY_SAFETY_KEY, read, write, saveRecord, removeRecord, saveCategory, removeCategory, setBudget, parseBackup, backupText, prepareBackup, restore, hasSafety, restoreSafety, markBackup, saveAccount, updateAccountValue, archiveAccount, removeAccount, setAssetAmountsHidden, saveAssetCategory, removeAssetCategory, protect: persistence.protect, diagnostics: persistence.diagnostics, protectionWarning: persistence.protectionWarning, recoveryCandidate, restoreCandidate };
+module.exports = { KEY, SAFETY_KEY, V2_KEY, V2_SAFETY_KEY, LEGACY_KEY, LEGACY_SAFETY_KEY, read, write, saveRecord, removeRecord, saveCategory, removeCategory, setBudget, parseBackup, backupText, prepareBackup, restore, hasSafety, restoreSafety, markBackup, saveAccount, updateAccountValue, archiveAccount, removeAccount, setAssetAmountsHidden, saveAssetCategory, removeAssetCategory, protect: persistence.protect, diagnostics: persistence.diagnostics, protectionWarning: persistence.protectionWarning, capacity: persistence.capacity, capacityText: persistence.capacityText, capacityWarning: persistence.capacityWarning, recoveryCandidate, restoreCandidate };

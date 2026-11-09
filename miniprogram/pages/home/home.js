@@ -1,11 +1,11 @@
 const store = require('../../utils/store'); const core = require('../../utils/core'); const dates = require('../../utils/date'); const ui = require('../../utils/ui');
 Page({
-  data: { today: '', todayText: '0.00', monthText: '0.00', todaySummary: {}, monthSummary: {}, count: 0, groups: [], recentStart: '', recentCount: 0, recentShown: 0, recentLimit: 100, recentHasMore: false, budget: 0, budgetPercent: 0, remainingText: '', overspent: false, storageError: '' },
+  data: { today: '', todayText: '0.00', monthText: '0.00', todaySummary: {}, monthSummary: {}, count: 0, groups: [], recentStart: '', recentCount: 0, recentShown: 0, recentLimit: 100, recentHasMore: false, budget: 0, budgetPercent: 0, remainingText: '', overspent: false, storageError: '', capacityWarning: '' },
   onShow() {
     this.refresh();
   },
   refresh() {
-    this.setData({ protectionWarning: store.protectionWarning() });
+    this.setData({ protectionWarning: store.protectionWarning(), capacityWarning: store.capacityWarning() });
     try {
       const s = store.read(); const today = dates.dateKey(new Date());
       const day = core.filterRecords(s, { start: today, end: today }); const month = core.filterRecords(s, dates.range('month', today));

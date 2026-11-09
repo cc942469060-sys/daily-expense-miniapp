@@ -19,6 +19,8 @@ test.beforeEach(() => {
   io = installStorageIO(wx, db);
 });
 function seed() { store.saveRecord(input); return clone(db.get(store.KEY)); }
+// Storage snapshots reference shared chunks, so read their contents through the recovery API.
+function slotBudgets() { return persistence.SNAPSHOTS.map(k => store.recoveryCandidate(k).state.settings.budgetCents).sort(); }
 function backupPage() {
   let config; global.Page = value => { config = value; };
   const file = path.resolve(__dirname, '../miniprogram/pages/backup/backup.js'); delete require.cache[file]; require(file);
@@ -65,21 +67,27 @@ test('只有导入前副本也不能创建空主账本，且检查不修改副�
   assert.ok(report.candidates.find(c => c.id === store.SAFETY_KEY).valid); assert.deepEqual(writes, []);
 });
 test('旧版固定名称 JSON 可以被发现和恢复，原文件不被覆盖', () => {
-  const s = seed(); const raw = JSON.stringify({ app: 'daily-expense-miniapp', version: 3, state: s });
+  seed(); const s = store.read(); const raw = JSON.stringify({ app: 'daily-expense-miniapp', version: 3, state: s });
   db.clear(); io.files.clear(); io.files.set('/sandbox/xiaorizhang-backup.json', raw);
   assert.throws(() => store.read()); const c = store.recoveryCandidate('file:xiaorizhang-backup.json');
   store.restoreCandidate(c.id, c.token); assert.equal(store.read().records.length, 1);
   assert.equal(io.files.get('/sandbox/xiaorizhang-backup.json'), raw);
 });
 test('冷启动为已有账本建立保护，但不改写主账本', () => {
-  const s = seed(); db.clear(); io.files.clear(); db.set(store.KEY, s); writes = [];
-  store.protect(); assert.equal(writes.includes(store.KEY), false); assert.deepEqual(db.get(store.KEY), s);
+  const root = seed(); const state = store.read();
+  // Chunked ledger whose protection copies were lost.
+  for (const key of [...persistence.SNAPSHOTS, persistence.MARKER]) db.delete(key); io.files.clear(); writes = [];
+  store.protect(); assert.equal(writes.includes(store.KEY), false); assert.deepEqual(db.get(store.KEY), root);
+  assert.ok(db.has(persistence.MARKER)); assert.ok(io.files.has('/sandbox/' + persistence.AUTO_FILES[0]));
+  assert.equal(store.recoveryCandidate(persistence.SNAPSHOTS[0]).records, 1);
+  // Single-object ledger written by an earlier version.
+  db.clear(); io.files.clear(); db.set(store.KEY, state); writes = [];
+  store.protect(); assert.equal(writes.includes(store.KEY), false); assert.deepEqual(db.get(store.KEY), state);
   assert.ok(db.has(persistence.MARKER)); assert.ok(io.files.has('/sandbox/' + persistence.AUTO_FILES[0]));
 });
 test('两个快照和两个文件保留最近不同版本，不因重复读取被轮换', () => {
   seed(); store.setBudget('100'); store.setBudget('200'); store.setBudget('300');
-  const storage = persistence.SNAPSHOTS.map(k => db.get(k));
-  assert.deepEqual(storage.map(s => s.state.settings.budgetCents).sort(), [20000, 30000]);
+  assert.deepEqual(slotBudgets(), [20000, 30000]);
   assert.equal(io.files.size, 2); const before = [...io.files]; writes = [];
   store.read(); store.read(); store.diagnostics();
   assert.deepEqual(writes, []); assert.deepEqual([...io.files], before);
@@ -110,7 +118,7 @@ test('主写入成功后的快照失败只标记保护不足，不谎报保存�
 });
 test('保护与诊断日志都写入失败时，本次会话仍显示保护不足', () => {
   const set = wx.setStorageSync;
-  wx.setStorageSync = (key, value) => { if (key !== store.KEY) throw new Error('quota'); set(key, value); };
+  wx.setStorageSync = (key, value) => { if (key !== store.KEY && !key.startsWith(persistence.CHUNK_PREFIX)) throw new Error('quota'); set(key, value); };
   store.saveRecord(input); assert.equal(store.read().records.length, 1); assert.match(store.protectionWarning(), /未完整完成/);
 });
 test('主写入被静默丢弃时必须报结果无法核实，不报成功', () => {
@@ -124,11 +132,11 @@ test('平台返回对象引用时，失败的修改也不能改变存储中的�
 });
 test('导出时间变化不挤掉上一版业务数据', () => {
   seed(); store.setBudget('100'); store.markBackup(); store.markBackup();
-  assert.deepEqual(persistence.SNAPSHOTS.map(k => db.get(k).state.settings.budgetCents).sort(), [0, 10000]);
+  assert.deepEqual(slotBudgets(), [0, 10000]);
 });
 test('返回较旧业务状态后，下一次修改仍保留直接上一版', () => {
   seed(); store.setBudget('100'); store.setBudget('0'); store.setBudget('200');
-  assert.deepEqual(persistence.SNAPSHOTS.map(k => db.get(k).state.settings.budgetCents).sort(), [0, 20000]);
+  assert.deepEqual(slotBudgets(), [0, 20000]);
   assert.deepEqual([...io.files.values()].map(text => JSON.parse(text).state.settings.budgetCents).sort(), [0, 20000]);
 });
 test('存储目录不可读时仍可只读检查并导出独立文件副本', async () => {
@@ -154,7 +162,7 @@ test('JSON 文件名冲突时拒绝覆盖旧文件', async () => {
   assert.equal(io.files.get('/sandbox/xiaorizhang-backup-collision.json'), 'original');
 });
 test('一个副本校验失败不妨碍发现其他有效副本', () => {
-  seed(); store.setBudget('100'); const value = db.get(persistence.SNAPSHOTS[0]); value.state.records[0].amountCents++;
+  seed(); store.setBudget('100'); const value = db.get(persistence.SNAPSHOTS[0]); value.manifest.updatedAt = '2000-01-01T00:00:00.000Z';
   const report = store.diagnostics(); assert.equal(report.candidates.find(c => c.id === persistence.SNAPSHOTS[0]).valid, false);
   assert.ok(report.candidates.find(c => c.id === persistence.SNAPSHOTS[1]).valid);
 });

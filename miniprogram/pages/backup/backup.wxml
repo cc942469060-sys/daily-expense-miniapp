@@ -1,7 +1,8 @@
 <view class="page">
   <view class="title">给记录留个副本</view><view class="subtitle">账本属于你，也随时可以带走</view>
   <view wx:if="{{storageError}}" class="error">{{storageError}}</view>
-  <view wx:else class="panel"><view class="row"><text>当前账单</text><text class="section-title">{{count}} 笔</text></view><view class="row"><text>资产与负债账户</text><text class="section-title">{{accountCount}} 个</text></view><view class="note">最近成功发送备份：{{backupTime}}</view></view>
+  <view wx:else class="panel"><view class="row"><text>当前账单</text><text class="section-title">{{count}} 笔</text></view><view class="row"><text>资产与负债账户</text><text class="section-title">{{accountCount}} 个</text></view><view class="note">最近成功发送备份：{{backupTime}}</view><view wx:if="{{storageUsage}}" class="note">本地存储已用：{{storageUsage}}</view></view>
+  <view wx:if="{{capacityWarning}}" class="error">{{capacityWarning}}</view>
   <view wx:if="{{protectionWarning}}" class="error">{{protectionWarning}}</view>
   <view wx:if="{{storageError || protectionWarning}}" class="recovery-hint">可展开下方“高级恢复”检查本地保护副本。</view>
   <view class="panel">
