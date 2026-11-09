@@ -2,6 +2,7 @@
 function installStorageIO(wx, db) {
   const files = new Map(); const root = '/sandbox';
   wx.getStorageInfoSync = () => ({ keys: [...db.keys()], currentSize: 1, limitSize: 10240 });
+  wx.removeStorageSync = key => { db.delete(key); };
   wx.env = { USER_DATA_PATH: root };
   const fs = {
     statSync: p => { if (!files.has(p)) throw new Error('ENOENT'); return { size: Buffer.byteLength(files.get(p)), isFile: () => true }; },

@@ -8,9 +8,11 @@ function exportTime(item) {
   return match ? Number(match[1]) : 0;
 }
 Page({
-  data: { count: 0, accountCount: 0, backupTime: '尚未成功发送备份', busy: false, storageError: '', fileName: '', pendingId: '', sendFileType: '', sendStatus: '', sendError: '', latestExport: null, historyExports: [], recoveryCopies: [], historyOpen: false, recoveryOpen: false, hasSafety: false, inspected: false, candidates: [], diagnosticText: '', protectionWarning: '' },
+  data: { count: 0, accountCount: 0, backupTime: '尚未成功发送备份', busy: false, storageError: '', fileName: '', pendingId: '', sendFileType: '', sendStatus: '', sendError: '', latestExport: null, historyExports: [], recoveryCopies: [], historyOpen: false, recoveryOpen: false, hasSafety: false, inspected: false, candidates: [], diagnosticText: '', protectionWarning: '', storageUsage: '', capacityWarning: '' },
   onShow() { this.refresh(); },
   refresh() {
+    const usage = store.capacity();
+    this.setData({ storageUsage: usage ? store.capacityText(usage) : '', capacityWarning: store.capacityWarning() });
     try {
       const s = store.read(); const time = s.lastBackupAt ? new Date(s.lastBackupAt) : null;
       this.setData({ count: s.records.length, accountCount: s.accounts.length, backupTime: time && !Number.isNaN(time.getTime()) ? `${dates.dateKey(time)} ${dates.timeKey(time)}` : '尚未成功发送备份', storageError: '' });

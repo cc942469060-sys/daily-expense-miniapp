@@ -32,7 +32,8 @@ function chooseBackup() {
   return new Promise((resolve, reject) => {
     if (!wx.chooseMessageFile) { reject(new Error('当前环境不支持选择文件，请使用微信真机恢复备份')); return; }
     wx.chooseMessageFile({ count: 1, type: 'file', extension: ['json'], success: res => {
-      const f = res.tempFiles[0]; if (!f || f.size > 8 * 1024 * 1024) { reject(new Error('备份文件过大，最多支持 8 MB')); return; }
+      // A full 10MB local ledger exports to about 13MB of indented JSON.
+      const f = res.tempFiles[0]; if (!f || f.size > 16 * 1024 * 1024) { reject(new Error('备份文件过大，最多支持 16 MB')); return; }
       wx.getFileSystemManager().readFile({ filePath: f.path, encoding: 'utf8', success: r => resolve(r.data), fail: () => reject(new Error('无法读取备份文件')) });
     }, fail: e => /cancel/i.test(e.errMsg || '') ? resolve(null) : reject(new Error('选择文件失败，请在真机重试')) });
   });

@@ -154,8 +154,8 @@ test('迁移写入失败保留旧账本，重试成功；损坏数据不被空�
 
 test('新版备份完整往返，旧备份解析不写入当前账本且未知版本被拒绝', () => {
   store.saveRecord(income()); store.saveRecord(input({ refund: '10' })); store.setBudget('2000');
-  const before = clone(db.get(store.KEY)); const backup = JSON.parse(store.backupText());
-  assert.equal(backup.version, 3); assert.deepEqual(store.parseBackup(JSON.stringify(backup)), before);
+  const before = clone(db.get(store.KEY)); const state = store.read(); const backup = JSON.parse(store.backupText());
+  assert.equal(backup.version, 3); assert.deepEqual(store.parseBackup(JSON.stringify(backup)), state);
   const parsed = store.parseBackup(JSON.stringify({ app: 'daily-expense-miniapp', version: 1, state: legacy() }));
   assert.equal(parsed.version, 3); assert.equal(parsed.records[0].type, 'expense');
   assert.deepEqual(db.get(store.KEY), before);
@@ -177,10 +177,10 @@ test('从旧账本直接恢复时也保留原账本，写入失败不改变当�
   db.set(store.LEGACY_KEY, legacy()); store.restore(core.freshState());
   assert.deepEqual(db.get(store.SAFETY_KEY), legacy()); store.restoreSafety();
   assert.equal(store.read().records[0].id, 'old_bill');
-  store.saveRecord(income()); const before = clone(db.get(store.KEY)); failKey = store.KEY;
+  store.saveRecord(income()); const before = clone(db.get(store.KEY)); const records = store.read().records; failKey = store.KEY;
   assert.throws(() => store.restore(core.freshState()), /保存失败/);
   assert.deepEqual(db.get(store.KEY), before);
-  failKey = ''; store.restoreSafety(); assert.deepEqual(store.read().records, before.records);
+  failKey = ''; store.restoreSafety(); assert.deepEqual(store.read().records, records);
 });
 
 test('分类名称在类型内唯一，迁移同类型且每种类型至少保留一个', () => {
