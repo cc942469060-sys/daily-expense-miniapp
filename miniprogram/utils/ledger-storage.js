@@ -7,6 +7,9 @@ const OLD = ['daily-expense:state:v2', 'daily-expense:state:v1'];
 const SAFETY = ['daily-expense:before-restore:v3', 'daily-expense:before-restore:v2', 'daily-expense:before-restore:v1'];
 const AUTO_FILES = ['xiaorizhang-auto-0.json', 'xiaorizhang-auto-1.json'];
 const OLD_EXPORT = 'xiaorizhang-backup.json';
+// Manual JSON exports; only these files may be deleted from the app.
+const EXPORT_NAME = /^xiaorizhang-backup(?:-[a-zA-Z0-9-]+)?\.json$/;
+const FILE_FULL = '保存失败：设备文件空间不足，无法先备份上一版账本，已取消保存，原数据未改动。请到「我的 → 导出与备份」删除不需要的导出文件后重试。';
 // WeChat allows 1MB per storage key and 10MB in total. KEY therefore holds either a legacy
 // single-object ledger or a small index of immutable chunks; writing the index is the commit point.
 const CHUNK_PREFIX = 'daily-expense:chunk:';
@@ -33,6 +36,13 @@ function setItem(key, value) {
   catch (e) { const error = e instanceof Error ? e : new Error(String((e && e.errMsg) || e)); error.storage = true; throw error; }
 }
 function quota(e) { return !!e && e.storage === true && /exceed|quota|full|空间不足/i.test(String(e.message || '')); }
+function fileStep(action) {
+  // Tag file-write failures; a full user-file area (200MB, shared with caches) needs its own advice.
+  try { return action(); }
+  catch (e) { const error = e instanceof Error ? e : new Error(String((e && e.errMsg) || e)); error.file = true; throw error; }
+}
+function fileFull(e) { return !!e && e.file === true && /exceed|limit|full|no space|ENOSPC|空间/i.test(String(e.message || '')); }
+function exportTime(name) { const match = name.match(/^xiaorizhang-backup-(\d+)-/); return match ? Number(match[1]) : 0; }
 function keyList() {
   try {
     const info = wx.getStorageInfoSync();
@@ -297,13 +307,13 @@ function snapshotFile(state, manifest, stateText) {
   const path = `${root}/${name}`; const temp = `${path}.tmp`; const json = stateText || JSON.stringify(state);
   // Same envelope as format 1 copies (readable by earlier versions), plus the content fingerprint.
   const text = '{"format":1,"sequence":' + sequence + ',"savedAt":' + JSON.stringify(new Date().toISOString()) + ',"checksum":' + JSON.stringify(checksumText(json)) + ',"fingerprint":' + JSON.stringify(print) + ',"state":' + json + '}';
-  fs.writeFileSync(temp, text, 'utf8');
+  fileStep(() => fs.writeFileSync(temp, text, 'utf8'));
   if (fs.readFileSync(temp, 'utf8') !== text) throw new Error('备份文件核验失败');
   // Only replace the older/invalid slot after a verified temporary copy exists.
   // The other slot remains intact even if rename fails or the process exits.
   session().files.delete(name);
-  if (names.includes(name)) fs.unlinkSync(path);
-  fs.renameSync(temp, path);
+  if (names.includes(name)) fileStep(() => fs.unlinkSync(path));
+  fileStep(() => fs.renameSync(temp, path));
   if (!names.includes(name)) names.push(name);
   if (fs.readFileSync(path, 'utf8') !== text) throw new Error('备份文件核验失败');
   try { session().files.set(name, { sequence, fingerprint: print, size: fs.statSync(path).size }); } catch (e) { /* re-read next time */ }
@@ -331,7 +341,7 @@ function log(operation, result, state) {
 function protectState(state, manifest, stateText) {
   const failures = [];
   for (const [name, action] of [['历史快照', () => snapshot(state, manifest)], ['设备文件备份', () => snapshotFile(state, manifest, stateText)], ['使用标记', () => wx.setStorageSync(MARKER, { version: 1 })]]) {
-    try { action(); } catch (e) { failures.push(name); }
+    try { action(); } catch (e) { failures.push(fileFull(e) ? name + '（空间不足）' : name); }
   }
   // Leftover chunks only cost space; a failed cleanup is retried after the next save.
   try { collect(); } catch (e) { /* retried later */ }
@@ -398,8 +408,8 @@ function commit(input, touch = true, operation = 'save', recovering = false) {
   } catch (e) {
     if (next) discardUnreferenced(next);
     rememberWarning(true);
-    if (recovering || (previous && previous.raw)) log(operation, 'failed', state);
-    throw new Error('保存失败：' + reason(e) + '。原数据未主动覆盖，请先检查或导出备份。');
+    if (recovering || (previous && previous.raw)) log(operation, fileFull(e) ? 'failed:设备文件空间不足' : 'failed', state);
+    throw new Error(fileFull(e) ? FILE_FULL : '保存失败：' + reason(e) + '。原数据未主动覆盖，请先检查或导出备份。');
   }
   try {
     if (JSON.stringify(get(KEY)) !== JSON.stringify(next.manifest)) throw new Error('mismatch');
@@ -416,11 +426,14 @@ function commit(input, touch = true, operation = 'save', recovering = false) {
   log(operation, warnings.length ? 'committed-degraded:' + warnings.join(',') : 'ok', state);
   return state;
 }
-function candidates() {
+// options.only inspects a single candidate; options.exports === 'latest' lists older manual
+// exports by name and size without reading them, since there may be many large files.
+function candidates(options = {}) {
   session();
   const result = []; let keys;
   try { keys = keyList(); } catch (e) { result.push({ id: 'storage-error', label: '本地存储', error: e.message }); }
-  function add(id, label, read, kind) {
+  function add(id, label, read, kind, extra) {
+    if (options.only && id !== options.only) return;
     try {
       const raw = read(); if (missing(raw)) return;
       let state;
@@ -430,27 +443,43 @@ function candidates() {
         state = core.migrateState(raw.state);
       } else if (isManifest(raw)) state = core.migrateState(readManifest(raw, keys));
       else { if (!raw || raw.version !== Number(id.slice(-1))) throw new Error('数据版本无效'); state = core.migrateState(raw); }
-      result.push({ id, label, valid: true, records: state.records.length, accounts: state.accounts.length, updatedAt: state.updatedAt, savedAt: raw.savedAt || raw.exportedAt || '', state });
-    } catch (e) { result.push({ id, label, valid: false, error: e.message }); }
+      result.push(Object.assign({ id, label, valid: true, records: state.records.length, accounts: state.accounts.length, updatedAt: state.updatedAt, savedAt: raw.savedAt || raw.exportedAt || '', state }, extra));
+    } catch (e) { result.push(Object.assign({ id, label, valid: false, error: e.message }, extra)); }
   }
   for (const [key, label] of keys ? [[KEY, '当前账本'], ...OLD.map((key, i) => [key, '升级前账本 v' + (2 - i)]), ...SAFETY.map((key, i) => [key, '导入前副本 v' + (3 - i)]), ...SNAPSHOTS.map((key, i) => [key, '历史快照 ' + (i + 1)])] : []) {
     add(key, label, () => get(key, keys), SNAPSHOTS.includes(key) ? 'snapshot' : 'state');
   }
   try {
     const { fs, root, names } = disk();
-    const exports = names.filter(name => name === OLD_EXPORT || /^xiaorizhang-backup-[a-zA-Z0-9-]+\.json$/.test(name)).sort().reverse();
-    for (const name of AUTO_FILES.reduce((all, file) => all.concat(file, file + '.tmp'), []).concat(exports)) if (names.includes(name)) {
-      const autoIndex = AUTO_FILES.indexOf(name.replace(/\.tmp$/, ''));
-      const label = autoIndex < 0 ? '曾导出的 JSON 备份' : '设备自动备份 ' + (autoIndex + 1) + (name.endsWith('.tmp') ? '（中断时保留）' : '');
-      add('file:' + name, label, () => JSON.parse(fs.readFileSync(`${root}/${name}`, 'utf8')), autoIndex >= 0 ? 'snapshot' : 'backup');
+    const size = name => { try { return fs.statSync(`${root}/${name}`).size; } catch (e) { return null; } };
+    const read = name => () => JSON.parse(fs.readFileSync(`${root}/${name}`, 'utf8'));
+    for (const name of AUTO_FILES.reduce((all, file) => all.concat(file, file + '.tmp'), [])) if (names.includes(name)) {
+      const label = '设备自动备份 ' + (AUTO_FILES.indexOf(name.replace(/\.tmp$/, '')) + 1) + (name.endsWith('.tmp') ? '（中断时保留）' : '');
+      add('file:' + name, label, read(name), 'snapshot', { size: size(name) });
     }
+    // Newest first by the generation time in the file name; the old fixed name sorts last.
+    const exports = names.filter(name => EXPORT_NAME.test(name)).sort((a, b) => exportTime(b) - exportTime(a) || (a < b ? 1 : a > b ? -1 : 0));
+    exports.forEach((name, i) => {
+      const id = 'file:' + name;
+      if (options.only && id !== options.only) return;
+      if (options.exports === 'latest' && i > 0) { result.push({ id, label: '曾导出的 JSON 备份', pending: true, size: size(name) }); return; }
+      add(id, '曾导出的 JSON 备份', read(name), 'backup', { size: size(name) });
+    });
   } catch (e) { result.push({ id: 'file-error', label: '设备文件备份', error: '无法读取设备内备份文件' }); }
   return result;
 }
 function candidate(id) {
-  const value = candidates().find(item => item.id === id && item.valid);
+  const value = candidates({ only: id }).find(item => item.id === id && item.valid);
   if (!value) throw new Error('副本已变化或无法读取，请重新检查');
   return value;
+}
+function removeExports(ids) {
+  // Deletes only manual JSON exports chosen by the user; automatic copies are never touched.
+  const names = ids.map(id => String(id).replace(/^file:/, ''));
+  if (!ids.length || !ids.every(id => String(id).startsWith('file:')) || !names.every(name => EXPORT_NAME.test(name))) throw new Error('只能删除手动导出的 JSON 文件');
+  const { fs, root, names: present } = disk(); let removed = 0;
+  for (const name of names) if (present.includes(name)) { fs.unlinkSync(`${root}/${name}`); removed++; }
+  return removed;
 }
 function capacity() {
   try {
@@ -465,8 +494,8 @@ function capacityWarning() {
   if (!c || c.ratio < CAPACITY_WARNING) return '';
   return `本地存储已用 ${Math.min(100, Math.round(c.ratio * 100))}%（${capacityText(c)}）。请导出 JSON 备份并保存到设备之外；空间用满后将无法继续保存。`;
 }
-function diagnostics() {
-  const report = { inspectedAt: new Date().toISOString(), candidates: candidates().map(({ state, ...item }) => item), events: [] };
+function diagnostics(options) {
+  const report = { inspectedAt: new Date().toISOString(), candidates: candidates(options).map(({ state, ...item }) => item), events: [] };
   try { const info = wx.getStorageInfoSync(); report.storage = { currentSize: info.currentSize, limitSize: info.limitSize, ledgerKeys: info.keys.filter(key => key.startsWith('daily-expense:') && !key.startsWith(CHUNK_PREFIX)), chunkKeys: info.keys.filter(key => key.startsWith(CHUNK_PREFIX)).length, primaryPresent: info.keys.includes(KEY) }; } catch (e) { report.storageError = '无法读取存储容量'; }
   try { const app = wx.getAccountInfoSync().miniProgram; report.application = { version: app.version, environment: app.envVersion }; } catch (e) { report.application = { unavailable: true }; }
   try { const events = wx.getStorageSync(LOG); if (Array.isArray(events)) report.events = events.filter(e => e && typeof e === 'object').slice(-40).map(e => ({ time: e.time, operation: e.operation, result: e.result, version: e.version, records: e.records, accounts: e.accounts })); } catch (e) { report.logError = '无法读取诊断记录'; }
@@ -475,7 +504,10 @@ function diagnostics() {
 function protectionWarning() {
   try {
     const events = wx.getStorageSync(LOG); const last = Array.isArray(events) ? events[events.length - 1] : null;
-    return (warningOwner === wx && warningPending) || (last && /degraded|unverified|failed/.test(last.result)) ? '最近一次保存或备份保护未完整完成，请检查本地副本，并将有效 JSON 备份保存到设备之外。' : '';
+    if (!(warningOwner === wx && warningPending) && !(last && /degraded|unverified|failed/.test(last.result))) return '';
+    // A full file area blocks the next save, so say how to free space before that happens.
+    const space = last && /空间不足/.test(last.result) ? '设备文件空间不足，请到「导出与备份」删除不需要的导出文件，否则后续修改将无法保存。' : '';
+    return '最近一次保存或备份保护未完整完成，请检查本地副本，并将有效 JSON 备份保存到设备之外。' + space;
   } catch (e) { return '无法检查备份保护状态，请到「导出与备份」检查。'; }
 }
-module.exports = { KEY, MARKER, LOG, SNAPSHOTS, OLD, SAFETY, AUTO_FILES, CHUNK_PREFIX, CHUNK_MAX_LENGTH, missing, get, load, resolve, commit, protect, candidates, candidate, diagnostics, checksum, protectionWarning, capacity, capacityText, capacityWarning };
+module.exports = { KEY, MARKER, LOG, SNAPSHOTS, OLD, SAFETY, AUTO_FILES, CHUNK_PREFIX, CHUNK_MAX_LENGTH, missing, get, load, resolve, commit, protect, candidates, candidate, removeExports, diagnostics, checksum, protectionWarning, capacity, capacityText, capacityWarning };
