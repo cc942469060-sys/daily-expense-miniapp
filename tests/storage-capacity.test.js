@@ -133,7 +133,7 @@ test('存储总量用满时保存失败，原账本完整，不残留新分块',
   store.write(ledger(500)); const before = store.read(); const chunks = chunkKeys();
   // Fill the rest of the quota with other data, leaving room only for tiny writes.
   for (let i = 0; used() < TOTAL_LIMIT - 4096; i++) put('other:' + i, 'x'.repeat(Math.min(900 * 1024, TOTAL_LIMIT - 4096 - used())));
-  assert.throws(() => store.saveRecord(input), /保存失败：本地空间不足/);
+  assert.throws(() => store.saveRecord(input), /保存失败：本地存储空间即将用满.*暂停新增/);
   assert.deepEqual(chunkKeys(), chunks); restart(); assert.deepEqual(store.read(), before);
 });
 
@@ -146,6 +146,19 @@ test('存储用满时释放较旧的存储快照，仍可删除账单', () => {
   restart(); const after = store.read();
   assert.equal(after.records.length, count - 1); assert.ok(!after.records.some(r => r.id === victim));
   assert.ok(persistence.candidates().some(c => c.valid && c.id.startsWith('file:') && c.records === count));
+});
+
+test('剩余空间低于预留值时暂停新增，删除和修改仍可保存', () => {
+  store.write(ledger(3000)); const before = store.read();
+  const victim = before.records[1500].id; const target = before.records.find((r, i) => i > 2000 && r.type === 'expense');
+  for (let i = 0; used() < TOTAL_LIMIT - 400 * 1024; i++) put('other:' + i, 'x'.repeat(Math.min(900 * 1024, TOTAL_LIMIT - 400 * 1024 - used())));
+  writes = [];
+  assert.throws(() => store.saveRecord(input), /空间即将用满.*暂停新增/);
+  assert.ok(!writes.some(k => k === store.KEY || k.startsWith(persistence.CHUNK_PREFIX))); assert.equal(store.protectionWarning(), '');
+  store.removeRecord(victim);
+  store.saveRecord(Object.assign({}, input, { amount: '1.23' }), target.id);
+  restart(); const after = store.read();
+  assert.equal(after.records.length, 2999); assert.equal(after.records.find(r => r.id === target.id).amountCents, 123);
 });
 
 test('存储接近上限时首页和备份页提示容量', () => {

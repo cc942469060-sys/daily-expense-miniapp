@@ -34,16 +34,20 @@ Page({
   save() { this.commit(false); },
   saveMore() { this.commit(true); },
   commit(more) {
-    if (this.data.saving || !this.data.ready) return;
+    // Saving is synchronous, so a second tap queued during it runs right after `finally`.
+    // Once the page is leaving, ignore further taps; a repeat right after "保存并再记一笔"
+    // finds the cleared form and is dropped instead of showing a missing-amount error.
+    if (this.data.saving || !this.data.ready || this.leaving) return;
+    if (more && !this.data.amount && Date.now() - (this.savedAt || 0) < 1000) return;
     this.setData({ saving: true });
     try {
       const d = this.data;
       store.saveRecord({ type: d.type, amount: d.amount, categoryId: d.categoryId, date: d.date, time: d.time, payment: d.payments[d.paymentIndex], note: d.note, refund: d.refund }, d.id);
       ui.toast('已保存到本地');
-      if (more) this.setData({ amount: '', note: '', refund: '0', time: dates.timeKey(new Date()) });
-      else wx.navigateBack();
+      if (more) { this.savedAt = Date.now(); this.setData({ amount: '', note: '', refund: '0', time: dates.timeKey(new Date()) }); }
+      else { this.leaving = true; wx.navigateBack(); }
     } catch (e) { ui.error(e); }
-    finally { this.setData({ saving: false }); }
+    finally { if (!this.leaving) this.setData({ saving: false }); }
   },
   remove() {
     wx.showModal({ title: '删除这笔账单？', content: '删除后对应统计会立即更新，此操作无法撤销。', confirmText: '删除', confirmColor: '#B04E49', success: result => {

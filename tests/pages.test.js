@@ -85,3 +85,6 @@ test('空账本可切换全部和自定义，恢复到月和年后正常切换�
   p.modeChange(modeEvent('year')); p.shift({ currentTarget: { dataset: { step: -1 } } });
   assert.equal(p.data.stats.start, '2025-01-01'); assert.equal(p.data.stats.bars.length, 12);
 });
+test('保存期间排队的重复点击不会重复记账或多次返回',()=>{ const p=page('record'); p.onLoad({}); p.setData({amount:'12.30'}); p.save(); p.save(); p.saveMore(); assert.equal(store.read().records.length,1); assert.deepEqual(navigation,['back']); });
+test('保存并再记一笔后排队的重复点击被忽略，不弹出金额错误',()=>{ const p=page('record'); p.onLoad({}); p.setData({amount:'8.80'}); let errors=0; wx.showModal=()=>{ errors++; }; p.saveMore(); p.saveMore(); assert.equal(store.read().records.length,1); assert.equal(errors,0); p.setData({amount:'9.90'}); p.saveMore(); assert.equal(store.read().records.length,2); assert.equal(p.data.saving,false); });
+test('我的页面显示的版本号与 package.json 一致',()=>{ const p=page('mine'); assert.equal(p.data.version,require('../package.json').version); });

@@ -1,14 +1,17 @@
 const store = require('../../utils/store'); const core = require('../../utils/core'); const dates = require('../../utils/date'); const files = require('../../utils/files'); const ui = require('../../utils/ui');
 const assets = require('../../utils/assets');
 function isManualExport(item) { return /^file:xiaorizhang-backup(?:-[a-zA-Z0-9-]+)?\.json$/.test(item.id); }
-function exportTime(item) {
-  const timestamp = Date.parse(item.savedAt || '');
-  if (Number.isFinite(timestamp)) return timestamp;
-  const match = item.id.match(/^file:xiaorizhang-backup-(\d+)-/);
-  return match ? Number(match[1]) : 0;
+// Stored times are UTC ISO strings; show them in local time like the other dates in the app.
+function timeText(value) {
+  const time = new Date(value || '');
+  return value && !Number.isNaN(time.getTime()) ? `${dates.dateKey(time)} ${dates.timeKey(time)}` : '未知';
 }
+function nameTime(id) { const match = id.match(/^file:xiaorizhang-backup-(\d+)-/); return match ? Number(match[1]) : ''; }
+function sizeText(bytes) { return !Number.isFinite(bytes) ? '大小未知' : bytes >= 1048576 ? (bytes / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(bytes / 1024)) + ' KB'; }
+function display(item) { return Object.assign({}, item, { savedText: timeText(item.savedAt || nameTime(item.id)), updatedText: timeText(item.updatedAt), sizeText: sizeText(item.size) }); }
+function totalSize(items) { return items.reduce((sum, item) => sum + (Number.isFinite(item.size) ? item.size : 0), 0); }
 Page({
-  data: { count: 0, accountCount: 0, backupTime: '尚未成功发送备份', busy: false, storageError: '', fileName: '', pendingId: '', sendFileType: '', sendStatus: '', sendError: '', latestExport: null, historyExports: [], recoveryCopies: [], historyOpen: false, recoveryOpen: false, hasSafety: false, inspected: false, candidates: [], diagnosticText: '', protectionWarning: '', storageUsage: '', capacityWarning: '' },
+  data: { count: 0, accountCount: 0, backupTime: '尚未成功发送备份', busy: false, storageError: '', fileName: '', pendingId: '', sendFileType: '', sendStatus: '', sendError: '', latestExport: null, historyExports: [], recoveryCopies: [], historyOpen: false, recoveryOpen: false, hasSafety: false, inspected: false, candidates: [], diagnosticText: '', protectionWarning: '', storageUsage: '', capacityWarning: '', exportSizeText: '' },
   onShow() { this.refresh(); },
   refresh() {
     const usage = store.capacity();
@@ -20,21 +23,47 @@ Page({
     try { this.setData({ hasSafety: store.hasSafety() }); } catch (e) { this.setData({ hasSafety: false }); }
     this.inspectLocal();
   },
-  inspectLocal() {
-    const report = store.diagnostics();
+  inspectLocal(full) {
+    // Older exports are read only while the history list is open or on an explicit full check.
+    const report = store.diagnostics({ exports: full === true || this.data.historyOpen ? 'all' : 'latest' });
     if (this.lastSendDiagnostic) report.fileSend = this.lastSendDiagnostic;
-    const candidates = report.candidates.filter(item => item.id !== store.KEY);
-    const manual = candidates.filter(isManualExport).map(item => Object.assign({}, item, { fileName: item.id.slice(5) }))
-      .sort((a, b) => exportTime(b) - exportTime(a) || b.id.localeCompare(a.id));
-    this.setData({ inspected: true, candidates, latestExport: manual[0] || null, historyExports: manual.slice(1), recoveryCopies: candidates.filter(item => !isManualExport(item)), diagnosticText: JSON.stringify(report, null, 2), protectionWarning: store.protectionWarning() });
+    const candidates = report.candidates.filter(item => item.id !== store.KEY).map(display);
+    // Exports arrive newest first, ordered by the generation time in their file names.
+    const manual = candidates.filter(isManualExport).map(item => Object.assign({}, item, { fileName: item.id.slice(5) }));
+    this.setData({ inspected: true, candidates, latestExport: manual[0] || null, historyExports: manual.slice(1), recoveryCopies: candidates.filter(item => !isManualExport(item)), exportSizeText: manual.length ? sizeText(totalSize(manual)) : '', diagnosticText: JSON.stringify(report, null, 2), protectionWarning: store.protectionWarning() });
   },
-  toggleHistory() { this.setData({ historyOpen: !this.data.historyOpen }); },
+  inspectAll() { this.inspectLocal(true); },
+  toggleHistory() { const historyOpen = !this.data.historyOpen; this.setData({ historyOpen }); if (historyOpen) this.inspectLocal(true); },
   toggleRecovery() { this.setData({ recoveryOpen: !this.data.recoveryOpen }); },
+  removeExport(e) {
+    const item = [this.data.latestExport].concat(this.data.historyExports).find(c => c && c.id === e.currentTarget.dataset.id);
+    if (item) this.confirmRemove([item], '删除这份导出文件？', `${item.fileName}（${item.sizeText}）将从本机删除，无法恢复。已经发送到聊天或保存在其他位置的文件不受影响。`, '删除');
+  },
+  removeHistory() {
+    const items = this.data.historyExports;
+    if (items.length) this.confirmRemove(items, '删除全部历史导出？', `将删除 ${items.length} 个较早的 JSON 导出文件，共 ${sizeText(totalSize(items))}，保留最近一次手动备份。删除后无法恢复，已经发送到聊天的文件不受影响。`, '全部删除');
+  },
+  confirmRemove(items, title, content, confirmText) {
+    if (this.data.busy) return;
+    // These files may be the only good copies while the ledger cannot be read.
+    if (this.data.storageError) { ui.error(new Error('账本读取异常时不能删除导出文件，请先检查或恢复本地副本。')); return; }
+    this.setData({ busy: true });
+    const done = () => { this.setData({ busy: false }); this.inspectLocal(); };
+    wx.showModal({ title, content, confirmText, confirmColor: '#B04E49', success: r => {
+      if (r.confirm) ui.run(() => {
+        store.removeExports(items.map(item => item.id));
+        if (this.pendingFile && items.some(item => item.id === 'file:' + this.pendingFile.name)) { this.pendingFile = null; this.setData({ fileName: '', pendingId: '', sendFileType: '', sendStatus: '', sendError: '' }); }
+        ui.toast('已删除');
+      });
+      done();
+    }, fail: done });
+  },
   sendExport(e) {
     if (this.data.busy) return;
     return ui.run(() => {
       const id = e.currentTarget.dataset.id;
-      if (!this.data.candidates.some(item => item.id === id && item.valid && isManualExport(item))) throw new Error('请选择有效的导出文件');
+      // Unchecked history entries are validated by recoveryCandidate below.
+      if (!this.data.candidates.some(item => item.id === id && item.valid !== false && isManualExport(item))) throw new Error('请选择有效的导出文件');
       // Synchronous validation and native sending preserve the user's tap.
       store.recoveryCandidate(id);
       const name = id.slice(5);
@@ -44,7 +73,7 @@ Page({
     });
   },
   copyDiagnostics() {
-    this.inspectLocal();
+    this.inspectLocal(true);
     wx.setClipboardData({ data: this.data.diagnosticText, success: () => ui.toast('诊断摘要已复制'), fail: () => ui.error(new Error('复制失败，请重试')) });
   },
   async exportCandidate(e) {
@@ -60,7 +89,7 @@ Page({
     if (this.data.busy) return; this.setData({ busy: true });
     try {
       const item = store.recoveryCandidate(e.currentTarget.dataset.id);
-      const confirmed = await new Promise(resolve => wx.showModal({ title: '恢复此本地副本？', content: `${item.label}，账本时间 ${item.updatedAt || '未知'}。包含 ${item.records} 笔账单、${item.accounts} 个资产与负债账户。将替换当前账本，请先导出需要保留的副本。`, confirmText: '恢复', success: r => resolve(r.confirm), fail: () => resolve(false) }));
+      const confirmed = await new Promise(resolve => wx.showModal({ title: '恢复此本地副本？', content: `${item.label}，账本时间 ${timeText(item.updatedAt)}。包含 ${item.records} 笔账单、${item.accounts} 个资产与负债账户。将替换当前账本，请先导出需要保留的副本。`, confirmText: '恢复', success: r => resolve(r.confirm), fail: () => resolve(false) }));
       if (confirmed) { store.restoreCandidate(item.id, item.token); this.refresh(); ui.toast('副本已恢复'); }
     } catch (e) { ui.error(e); } finally { this.setData({ busy: false }); }
   },
