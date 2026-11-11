@@ -2,3 +2,6 @@
 .recent-heading { margin-top: 30rpx; }
 .budget-progress { margin-top: 22rpx; }
 .load-more { margin-top: 28rpx; }
+.reminder { margin-top: 24rpx; padding: 24rpx; border-radius: 20rpx; background: #FFF6E3; color: #6F5420; font-size: 25rpx; line-height: 1.8; }
+.reminder-actions { margin-top: 6rpx; }
+.reminder .later { color: #8C7A55; }

@@ -2,6 +2,7 @@
   <view class="row"><view><view class="title">把日子，记清楚。</view><view class="subtitle">小日账 · {{today}}</view></view><text class="plant">🌿</text></view>
   <view wx:if="{{protectionWarning}}" class="error" bindtap="backup">{{protectionWarning}}<view class="link">检查本地副本 ›</view></view>
   <view wx:if="{{capacityWarning}}" class="error" bindtap="backup">{{capacityWarning}}<view class="link">前往导出备份 ›</view></view>
+  <view wx:if="{{backupReminder}}" class="reminder"><view>{{backupReminder}}</view><view class="row reminder-actions"><text class="link" bindtap="backup">去备份 ›</text><text class="link later" bindtap="snoozeBackup">7 天后再提醒</text></view></view>
   <view wx:if="{{storageError}}" class="error" bindtap="backup">{{storageError}}<view class="link">前往恢复备份 ›</view></view>
   <block wx:else>
     <view class="panel hero">
