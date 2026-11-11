@@ -111,8 +111,10 @@ function filterRecords(state, filter) {
   return state.records.filter(r => (!f.type || r.type === f.type) && (!f.start || r.date >= f.start) && (!f.end || r.date <= f.end) && (!f.categoryId || r.categoryId === f.categoryId) && (!f.payment || r.payment === f.payment) && (!query || (r.note + ' ' + cats[r.categoryId].name).toLowerCase().includes(query)))
     .sort((a, b) => {
       const amountOrder = f.sort === 'amount_desc' ? net(b) - net(a) : f.sort === 'amount_asc' ? net(a) - net(b) : 0;
-      const timeOrder = (b.date + ' ' + b.time).localeCompare(a.date + ' ' + a.time) || b.createdAt - a.createdAt;
-      return amountOrder || timeOrder || (f.sort === 'amount_desc' || f.sort === 'amount_asc' ? a.id.localeCompare(b.id) : 0);
+      // Plain string comparison: dates and times have fixed formats, so this gives the same
+      // newest-first order as localeCompare without its per-comparison cost on some engines.
+      const timeOrder = b.date !== a.date ? (b.date < a.date ? -1 : 1) : b.time !== a.time ? (b.time < a.time ? -1 : 1) : b.createdAt - a.createdAt;
+      return amountOrder || timeOrder || (f.sort === 'amount_desc' || f.sort === 'amount_asc' ? (a.id < b.id ? -1 : a.id > b.id ? 1 : 0) : 0);
     });
 }
 function decorate(state, r) {

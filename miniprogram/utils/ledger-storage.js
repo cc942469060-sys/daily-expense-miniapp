@@ -2,6 +2,8 @@ const core = require('./core');
 const KEY = 'daily-expense:state:v3';
 const MARKER = 'daily-expense:initialized:v3';
 const LOG = 'daily-expense:diagnostics:v1';
+// Unexpected script errors, kept apart from LOG so they never hide a protection warning.
+const ERRORS = 'daily-expense:errors:v1';
 const SNAPSHOTS = ['daily-expense:snapshot:0', 'daily-expense:snapshot:1'];
 const OLD = ['daily-expense:state:v2', 'daily-expense:state:v1'];
 const SAFETY = ['daily-expense:before-restore:v3', 'daily-expense:before-restore:v2', 'daily-expense:before-restore:v1'];
@@ -583,10 +585,23 @@ function capacityWarning() {
   if (!c || c.ratio < CAPACITY_WARNING) return '';
   return `本地存储已用 ${Math.min(100, Math.round(c.ratio * 100))}%（${capacityText(c)}）。请导出 JSON 备份并保存到设备之外；剩余空间不足约 0.75 MB 时将暂停新增，删除和修改单笔记录仍可进行。`;
 }
+function recordError(kind, error) {
+  // Keeps the first lines of the message only, with quoted text and local paths removed, so
+  // the diagnostic summary never holds bill content or file paths. Logging must never throw.
+  try {
+    const raw = error && typeof error === 'object' ? (error.message || error.errMsg || String(error)) : String(error || '');
+    const message = raw.split('\n').map(line => line.trim()).filter(Boolean).slice(0, 3).join(' | ')
+      .replace(/(wxfile|https?|file):\/\/[^\s)]*/g, '[路径]').replace(/"[^"]*"|'[^']*'|“[^”]*”|「[^」]*」/g, '"…"').slice(0, 200);
+    const previous = wx.getStorageSync(ERRORS); const entries = Array.isArray(previous) ? previous.filter(e => e && typeof e === 'object').slice(-19) : [];
+    entries.push({ time: new Date().toISOString(), kind: String(kind).slice(0, 20), message });
+    wx.setStorageSync(ERRORS, entries);
+  } catch (e) { /* ignore */ }
+}
 function diagnostics(options) {
   const report = { inspectedAt: new Date().toISOString(), candidates: candidates(options).map(({ state, ...item }) => item), events: [] };
   try { const info = wx.getStorageInfoSync(); report.storage = { currentSize: info.currentSize, limitSize: info.limitSize, ledgerKeys: info.keys.filter(key => key.startsWith('daily-expense:') && !key.startsWith(CHUNK_PREFIX)), chunkKeys: info.keys.filter(key => key.startsWith(CHUNK_PREFIX)).length, primaryPresent: info.keys.includes(KEY) }; } catch (e) { report.storageError = '无法读取存储容量'; }
   try { const app = wx.getAccountInfoSync().miniProgram; report.application = { version: app.version, environment: app.envVersion }; } catch (e) { report.application = { unavailable: true }; }
+  try { const errors = wx.getStorageSync(ERRORS); if (Array.isArray(errors)) report.errors = errors.filter(e => e && typeof e === 'object').slice(-20).map(e => ({ time: e.time, kind: e.kind, message: e.message })); } catch (e) { report.errorLogError = '无法读取错误记录'; }
   try { const events = wx.getStorageSync(LOG); if (Array.isArray(events)) report.events = events.filter(e => e && typeof e === 'object').slice(-40).map(e => ({ time: e.time, operation: e.operation, result: e.result, version: e.version, records: e.records, accounts: e.accounts })); } catch (e) { report.logError = '无法读取诊断记录'; }
   return report;
 }
@@ -599,4 +614,4 @@ function protectionWarning() {
     return '最近一次保存或备份保护未完整完成，请检查本地副本，并将有效 JSON 备份保存到设备之外。' + space;
   } catch (e) { return '无法检查备份保护状态，请到「导出与备份」检查。'; }
 }
-module.exports = { KEY, MARKER, LOG, SNAPSHOTS, OLD, SAFETY, AUTO_FILES, CHUNK_PREFIX, CHUNK_MAX_LENGTH, missing, get, load, resolve, commit, protect, candidates, candidate, removeExports, diagnostics, checksum, protectionWarning, capacity, capacityText, capacityWarning };
+module.exports = { KEY, MARKER, LOG, ERRORS, recordError, SNAPSHOTS, OLD, SAFETY, AUTO_FILES, CHUNK_PREFIX, CHUNK_MAX_LENGTH, missing, get, load, resolve, commit, protect, candidates, candidate, removeExports, diagnostics, checksum, protectionWarning, capacity, capacityText, capacityWarning };
