@@ -32,40 +32,43 @@
     <view class="section-title">待发送 CSV 文件</view><view class="note file-name">{{fileName}}</view><view class="note">{{sendStatus}}</view>
     <view wx:if="{{sendError}}" class="error">{{sendError}}</view><button class="primary action" bindtap="sendGenerated" disabled="{{busy}}">发送／重试发送</button>
   </view>
-  <view class="panel">
-    <button class="secondary fold-button" bindtap="toggleHistory">历史导出 · {{historyExports.length}} 份 {{historyOpen ? '收起 ▴' : '展开 ▾'}}</button>
-    <view wx:if="{{exportSizeText}}" class="note">手动导出的 JSON 共占用设备空间 {{exportSizeText}}，程序不会自动删除。设备文件空间用满后将无法继续保存，可在这里删除不需要的文件。</view>
-    <block wx:if="{{historyOpen}}">
-      <view class="note">保留以前手动生成的 JSON 文件。发送直接使用原文件，不会额外生成备份。</view>
-      <view wx:if="{{!historyExports.length}}" class="note">暂无其他历史导出。</view>
-      <button wx:else class="danger action" bindtap="removeHistory" disabled="{{busy || storageError}}">删除全部历史导出（保留最近一份）</button>
-      <view wx:for="{{historyExports}}" wx:key="id" class="candidate">
-        <view class="file-name">{{item.fileName}} · {{item.sizeText}}</view>
-        <block wx:if="{{item.valid}}">
-          <view class="note">生成时间：{{item.savedText}} · {{item.records}} 笔账单 · {{item.accounts}} 个账户</view><view class="note">账本时间：{{item.updatedText}}</view>
-          <view wx:if="{{pendingId === item.id}}" class="note">{{sendStatus}}</view><view wx:if="{{pendingId === item.id && sendError}}" class="error">{{sendError}}</view>
-          <view class="row"><button class="secondary small-button" bindtap="sendExport" data-id="{{item.id}}" disabled="{{busy}}">发送此备份</button><button class="secondary small-button" bindtap="recoverCandidate" data-id="{{item.id}}" disabled="{{busy}}">恢复此副本</button><button class="danger small-button" bindtap="removeExport" data-id="{{item.id}}" disabled="{{busy || storageError}}">删除</button></view>
-        </block>
-        <block wx:else><view class="note">{{item.error}}；原文件仍保留。</view><button class="danger small-button" bindtap="removeExport" data-id="{{item.id}}" disabled="{{busy || storageError}}">删除</button></block>
-      </view>
-    </block>
-  </view>
-  <view class="panel">
-    <button class="secondary fold-button" bindtap="toggleRecovery">高级恢复 · {{recoveryCopies.length}} 项 {{recoveryOpen ? '收起 ▴' : '展开 ▾'}}</button>
-    <block wx:if="{{recoveryOpen}}">
-      <view class="note">这里是自动快照、设备自动备份及导入或升级前副本。检查不会修改账本。请核对时间和数量，先导出保存，再确认恢复。</view>
-      <view wx:if="{{latestExport && latestExport.valid}}" class="candidate"><view>恢复最近一次手动备份</view><view class="note file-name">{{latestExport.fileName}}</view><button class="secondary action" bindtap="recoverCandidate" data-id="{{latestExport.id}}" disabled="{{busy}}">恢复此副本</button></view>
-      <view wx:if="{{!recoveryCopies.length}}" class="note">未找到自动保护副本。</view>
-      <view wx:for="{{recoveryCopies}}" wx:key="id" class="candidate">
-        <view>{{item.label}}</view>
-        <block wx:if="{{item.valid}}"><view class="note">账本时间：{{item.updatedText}} · {{item.records}} 笔账单 · {{item.accounts}} 个账户</view><view wx:if="{{item.savedAt}}" class="note">副本时间：{{item.savedText}}</view><view class="row"><button class="secondary small-button" bindtap="exportCandidate" data-id="{{item.id}}" disabled="{{busy}}">导出副本</button><button class="secondary small-button" bindtap="recoverCandidate" data-id="{{item.id}}" disabled="{{busy}}">恢复此副本</button></view></block>
-        <view wx:else class="note">{{item.error}}；此副本暂不可恢复，原文件仍保留。</view>
-      </view>
-      <button wx:if="{{hasSafety}}" class="secondary action" bindtap="undoRestore" disabled="{{busy}}">恢复导入前副本</button>
-    </block>
-  </view>
-  <view class="panel"><view class="section-title">导出 CSV</view><view class="note">CSV 方便用 Excel 查看，不用于恢复账本。资产清单包含归档账户，不包含金额更新历史。</view><button class="secondary action" bindtap="exportCsv" disabled="{{busy || storageError}}">导出全部账单</button><button class="secondary action" bindtap="exportAssets" disabled="{{busy || storageError}}">导出资产清单</button></view>
   <view class="panel"><view class="section-title">从聊天文件恢复</view><view class="note">选择以前发送到微信聊天的 JSON 备份，支持 v1、v2、v3。恢复会整体替换当前数据，确认前请核对内容；旧版备份可能没有资产账户。</view><button class="secondary action" bindtap="importJson" disabled="{{busy}}">选择 JSON 备份</button></view>
-  <view class="panel"><view class="section-title">检查与诊断</view><button class="secondary action" bindtap="inspectAll" disabled="{{busy}}">重新检查本地文件</button><button class="secondary action" bindtap="copyDiagnostics" disabled="{{busy}}">复制诊断摘要</button><view class="note">摘要包含版本、数量、时间、读写状态及本次发送错误，不含账单内容。</view></view>
+  <button wx:if="{{!storageError && !protectionWarning}}" class="secondary fold-button more-button" bindtap="toggleMore">更多选项：历史导出、CSV、高级恢复与诊断 {{moreOpen ? '收起 ▴' : '展开 ▾'}}</button>
+  <block wx:if="{{moreOpen || storageError || protectionWarning}}">
+    <view class="panel">
+      <button class="secondary fold-button" bindtap="toggleHistory">历史导出 · {{historyExports.length}} 份 {{historyOpen ? '收起 ▴' : '展开 ▾'}}</button>
+      <view wx:if="{{exportSizeText}}" class="note">手动导出的 JSON 共占用设备空间 {{exportSizeText}}，程序不会自动删除。设备文件空间用满后将无法继续保存，可在这里删除不需要的文件。</view>
+      <block wx:if="{{historyOpen}}">
+        <view class="note">保留以前手动生成的 JSON 文件。发送直接使用原文件，不会额外生成备份。</view>
+        <view wx:if="{{!historyExports.length}}" class="note">暂无其他历史导出。</view>
+        <button wx:else class="danger action" bindtap="removeHistory" disabled="{{busy || storageError}}">删除全部历史导出（保留最近一份）</button>
+        <view wx:for="{{historyExports}}" wx:key="id" class="candidate">
+          <view class="file-name">{{item.fileName}} · {{item.sizeText}}</view>
+          <block wx:if="{{item.valid}}">
+            <view class="note">生成时间：{{item.savedText}} · {{item.records}} 笔账单 · {{item.accounts}} 个账户</view><view class="note">账本时间：{{item.updatedText}}</view>
+            <view wx:if="{{pendingId === item.id}}" class="note">{{sendStatus}}</view><view wx:if="{{pendingId === item.id && sendError}}" class="error">{{sendError}}</view>
+            <view class="row"><button class="secondary small-button" bindtap="sendExport" data-id="{{item.id}}" disabled="{{busy}}">发送此备份</button><button class="secondary small-button" bindtap="recoverCandidate" data-id="{{item.id}}" disabled="{{busy}}">恢复此副本</button><button class="danger small-button" bindtap="removeExport" data-id="{{item.id}}" disabled="{{busy || storageError}}">删除</button></view>
+          </block>
+          <block wx:else><view class="note">{{item.error}}；原文件仍保留。</view><button class="danger small-button" bindtap="removeExport" data-id="{{item.id}}" disabled="{{busy || storageError}}">删除</button></block>
+        </view>
+      </block>
+    </view>
+    <view class="panel">
+      <button class="secondary fold-button" bindtap="toggleRecovery">高级恢复 · {{recoveryCopies.length}} 项 {{recoveryOpen ? '收起 ▴' : '展开 ▾'}}</button>
+      <block wx:if="{{recoveryOpen}}">
+        <view class="note">这里是自动快照、设备自动备份及导入或升级前副本。检查不会修改账本。请核对时间和数量，先导出保存，再确认恢复。</view>
+        <view wx:if="{{latestExport && latestExport.valid}}" class="candidate"><view>恢复最近一次手动备份</view><view class="note file-name">{{latestExport.fileName}}</view><button class="secondary action" bindtap="recoverCandidate" data-id="{{latestExport.id}}" disabled="{{busy}}">恢复此副本</button></view>
+        <view wx:if="{{!recoveryCopies.length}}" class="note">未找到自动保护副本。</view>
+        <view wx:for="{{recoveryCopies}}" wx:key="id" class="candidate">
+          <view>{{item.label}}</view>
+          <block wx:if="{{item.valid}}"><view class="note">账本时间：{{item.updatedText}} · {{item.records}} 笔账单 · {{item.accounts}} 个账户</view><view wx:if="{{item.savedAt}}" class="note">副本时间：{{item.savedText}}</view><view class="row"><button class="secondary small-button" bindtap="exportCandidate" data-id="{{item.id}}" disabled="{{busy}}">导出副本</button><button class="secondary small-button" bindtap="recoverCandidate" data-id="{{item.id}}" disabled="{{busy}}">恢复此副本</button></view></block>
+          <view wx:else class="note">{{item.error}}；此副本暂不可恢复，原文件仍保留。</view>
+        </view>
+        <button wx:if="{{hasSafety}}" class="secondary action" bindtap="undoRestore" disabled="{{busy}}">恢复导入前副本</button>
+      </block>
+    </view>
+    <view class="panel"><view class="section-title">导出 CSV</view><view class="note">CSV 方便用 Excel 查看，不用于恢复账本。资产清单包含归档账户，不包含金额更新历史。</view><button class="secondary action" bindtap="exportCsv" disabled="{{busy || storageError}}">导出全部账单</button><button class="secondary action" bindtap="exportAssets" disabled="{{busy || storageError}}">导出资产清单</button></view>
+    <view class="panel"><view class="section-title">检查与诊断</view><button class="secondary action" bindtap="inspectAll" disabled="{{busy}}">重新检查本地文件</button><button class="secondary action" bindtap="copyDiagnostics" disabled="{{busy}}">复制诊断摘要</button><view class="note">摘要包含版本、数量、时间、读写状态及本次发送错误，不含账单内容。</view></view>
+  </block>
   <view wx:if="{{busy}}" class="note">正在处理，请稍候…</view>
 </view>

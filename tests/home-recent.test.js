@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const core = require('../miniprogram/utils/core');
-const store = require('../miniprogram/utils/store');
+const store = require('../miniprogram/utils/store'); const { applySetData } = require('./helpers/set-data');
 let db; let navigation;
 const clone = value => value === undefined ? '' : JSON.parse(JSON.stringify(value));
 function record(id, date, extra) {
@@ -11,7 +11,7 @@ function home(records) {
   const s = core.freshState(); s.records = records; s.settings.budgetCents = 10000; db.set(store.KEY, s);
   let config; global.Page = value => { config = value; };
   const file = require.resolve('../miniprogram/pages/home/home'); delete require.cache[file]; require(file);
-  const p = { data: clone(config.data), setData(value) { Object.assign(this.data, value); } };
+  const p = { data: clone(config.data), setData(value) { applySetData(this.data, value); } };
   for (const [key, value] of Object.entries(config)) if (typeof value === 'function') p[key] = value.bind(p);
   p.onShow(); return p;
 }

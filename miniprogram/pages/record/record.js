@@ -2,8 +2,16 @@ const store = require('../../utils/store'); const core = require('../../utils/co
 Page({
   data: { id: '', type: 'expense', amount: '', categoryId: '', categories: [], date: '', time: '', today: '', paymentIndex: 0, payments: core.PAYMENTS, note: '', refund: '0', saving: false, ready: false },
   defaults(s, type) {
-    const categories = s.categories.filter(c => c.type === type);
-    const recent = s.records.filter(r => r.type === type).sort((a, b) => b.updatedAt - a.updatedAt)[0];
+    // Categories used most in the last 90 days come first; ties keep the order from category
+    // management. The default stays the category of the most recently updated bill of this type.
+    const since = dates.shiftDays(dates.dateKey(new Date()), -89); const uses = {}; let recent = null;
+    for (const r of s.records) {
+      if (r.type !== type) continue;
+      if (r.date >= since) uses[r.categoryId] = (uses[r.categoryId] || 0) + 1;
+      if (!recent || r.updatedAt > recent.updatedAt) recent = r;
+    }
+    const categories = s.categories.filter(c => c.type === type).map((category, order) => ({ category, order }))
+      .sort((a, b) => (uses[b.category.id] || 0) - (uses[a.category.id] || 0) || a.order - b.order).map(item => item.category);
     return { type, categories, categoryId: recent ? recent.categoryId : categories[0].id, paymentIndex: recent ? core.PAYMENTS.indexOf(recent.payment) : 0 };
   },
   onLoad(options) {

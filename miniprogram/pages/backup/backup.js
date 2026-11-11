@@ -11,7 +11,7 @@ function sizeText(bytes) { return !Number.isFinite(bytes) ? '大小未知' : byt
 function display(item) { return Object.assign({}, item, { savedText: timeText(item.savedAt || nameTime(item.id)), updatedText: timeText(item.updatedAt), sizeText: sizeText(item.size) }); }
 function totalSize(items) { return items.reduce((sum, item) => sum + (Number.isFinite(item.size) ? item.size : 0), 0); }
 Page({
-  data: { count: 0, accountCount: 0, backupTime: '尚未成功发送备份', busy: false, storageError: '', fileName: '', pendingId: '', sendFileType: '', sendStatus: '', sendError: '', latestExport: null, historyExports: [], recoveryCopies: [], historyOpen: false, recoveryOpen: false, hasSafety: false, inspected: false, candidates: [], diagnosticText: '', protectionWarning: '', storageUsage: '', capacityWarning: '', exportSizeText: '' },
+  data: { count: 0, accountCount: 0, backupTime: '尚未成功发送备份', busy: false, storageError: '', fileName: '', pendingId: '', sendFileType: '', sendStatus: '', sendError: '', latestExport: null, historyExports: [], recoveryCopies: [], historyOpen: false, recoveryOpen: false, moreOpen: false, hasSafety: false, inspected: false, candidates: [], diagnosticText: '', protectionWarning: '', storageUsage: '', capacityWarning: '', exportSizeText: '' },
   onShow() { this.refresh(); },
   refresh() {
     const usage = store.capacity();
@@ -34,6 +34,8 @@ Page({
   },
   inspectAll() { this.inspectLocal(true); },
   toggleHistory() { const historyOpen = !this.data.historyOpen; this.setData({ historyOpen }); if (historyOpen) this.inspectLocal(true); },
+  // Less common tools stay folded; they show by themselves when the ledger or its protection has a problem.
+  toggleMore() { this.setData({ moreOpen: !this.data.moreOpen }); },
   toggleRecovery() { this.setData({ recoveryOpen: !this.data.recoveryOpen }); },
   removeExport(e) {
     const item = [this.data.latestExport].concat(this.data.historyExports).find(c => c && c.id === e.currentTarget.dataset.id);

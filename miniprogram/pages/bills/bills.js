@@ -1,9 +1,7 @@
 const store = require('../../utils/store'); const core = require('../../utils/core'); const dates = require('../../utils/date'); const ui = require('../../utils/ui');
 const SORTS = ['date_desc', 'amount_desc', 'amount_asc'];
 const PAGE_SIZE = 100;
-// Only the fields the list shows (plus the amount used for sorting) are sent to the view layer.
-const FIELDS = ['id', 'type', 'amountCents', 'refundCents', 'payment', 'date', 'time', 'note', 'categoryName', 'icon', 'typeName', 'sign', 'amountText', 'refundText'];
-function pick(bill) { const view = {}; FIELDS.forEach(key => { view[key] = bill[key]; }); return view; }
+const { pick, viewGroups, appendGroups } = require('../../utils/list');
 Page({
   data: { type: '', start: '', end: '', query: '', categoryId: '', categories: [], categoryNames: [], categoryIndex: 0, payments: ['全部收支方式'].concat(core.PAYMENTS), paymentIndex: 0, sortNames: ['时间：从近到远', '金额：从大到小', '金额：从小到大'], sortIndex: 0, groups: [], summary: {}, count: 0, totalText: '0.00', limit: 100, hasMore: false, shown: 0, today: '', storageError: '' },
   onLoad(options) {
@@ -29,7 +27,7 @@ Page({
   build(slice) {
     // Day subtotals always use the full filtered list, so paging never changes them.
     if (this.data.sortIndex !== 0) return slice.length ? [{ date: 'amount', records: slice.map(r => pick(core.decorate(this.ledger, r))) }] : [];
-    return core.groups(this.ledger, slice, this.filtered, this.data.type).map(g => Object.assign({}, g, { records: g.records.map(pick) }));
+    return viewGroups(core.groups(this.ledger, slice, this.filtered, this.data.type));
   },
   typeChange(e) {
     const type = e.currentTarget.dataset.type;
@@ -49,16 +47,8 @@ Page({
   more() {
     const d = this.data;
     if (!d.hasMore || !this.filtered) return;
-    const limit = d.limit + PAGE_SIZE; const added = this.build(this.filtered.slice(d.shown, limit));
-    const update = { limit, shown: Math.min(limit, this.filtered.length), hasMore: this.filtered.length > limit };
-    // Append through data paths so only the new page crosses to the view layer.
-    let index = d.groups.length;
-    if (index && added.length && d.groups[index - 1].date === added[0].date) {
-      const last = d.groups[index - 1]; const first = added.shift();
-      first.records.forEach((bill, i) => { update[`groups[${index - 1}].records[${last.records.length + i}]`] = bill; });
-    }
-    added.forEach(group => { update[`groups[${index++}]`] = group; });
-    this.setData(update);
+    const limit = d.limit + PAGE_SIZE;
+    this.setData(appendGroups(d.groups, this.build(this.filtered.slice(d.shown, limit)), { limit, shown: Math.min(limit, this.filtered.length), hasMore: this.filtered.length > limit }));
   },
   onReachBottom() { this.more(); },
   select(e) { ui.edit(e.detail.id); },

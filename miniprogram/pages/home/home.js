@@ -1,4 +1,5 @@
 const store = require('../../utils/store'); const core = require('../../utils/core'); const dates = require('../../utils/date'); const ui = require('../../utils/ui');
+const { viewGroups, appendGroups } = require('../../utils/list');
 Page({
   data: { today: '', todayText: '0.00', monthText: '0.00', todaySummary: {}, monthSummary: {}, count: 0, groups: [], recentStart: '', recentCount: 0, recentShown: 0, recentLimit: 100, recentHasMore: false, budget: 0, budgetPercent: 0, remainingText: '', overspent: false, storageError: '', capacityWarning: '' },
   onShow() {
@@ -12,11 +13,19 @@ Page({
       const todaySummary = core.summarize(day); const monthSummary = core.summarize(month);
       const used = monthSummary.expenseCents; const budget = s.settings.budgetCents;
       const recentStart = dates.shiftDays(today, -29); const recent = core.filterRecords(s, { start: recentStart, end: today });
-      this.setData({ today, todayText: todaySummary.expenseText, monthText: monthSummary.expenseText, todaySummary, monthSummary, count: day.length, recentStart, recentCount: recent.length, recentShown: Math.min(this.data.recentLimit, recent.length), recentHasMore: recent.length > this.data.recentLimit, groups: core.groups(s, recent.slice(0, this.data.recentLimit), recent), budget, budgetPercent: budget ? Math.min(100, Math.round(used / budget * 100)) : 0, remainingText: core.moneyText(Math.abs(budget - used)), overspent: used > budget, storageError: '', backupReminder: store.backupReminder(s) });
-    } catch (e) { this.setData({ storageError: e.message, groups: [], recentCount: 0, recentShown: 0, recentHasMore: false, backupReminder: '' }); }
+      this.ledger = s; this.recent = recent;
+      this.setData({ today, todayText: todaySummary.expenseText, monthText: monthSummary.expenseText, todaySummary, monthSummary, count: day.length, recentStart, recentCount: recent.length, recentShown: Math.min(this.data.recentLimit, recent.length), recentHasMore: recent.length > this.data.recentLimit, groups: viewGroups(core.groups(s, recent.slice(0, this.data.recentLimit), recent)), budget, budgetPercent: budget ? Math.min(100, Math.round(used / budget * 100)) : 0, remainingText: core.moneyText(Math.abs(budget - used)), overspent: used > budget, storageError: '', backupReminder: store.backupReminder(s) });
+    } catch (e) { this.ledger = null; this.recent = null; this.setData({ storageError: e.message, groups: [], recentCount: 0, recentShown: 0, recentHasMore: false, backupReminder: '' }); }
   },
   snoozeBackup() { ui.run(() => { store.snoozeBackupReminder(); this.setData({ backupReminder: '' }); }); },
-  moreRecent() { if (!this.data.recentHasMore) return; this.setData({ recentLimit: this.data.recentLimit + 100 }); this.refresh(); },
+  moreRecent() {
+    // Append the next page only; day subtotals already cover the full 30 days.
+    const d = this.data;
+    if (!d.recentHasMore || !this.recent) return;
+    const limit = d.recentLimit + 100;
+    const added = viewGroups(core.groups(this.ledger, this.recent.slice(d.recentShown, limit), this.recent));
+    this.setData(appendGroups(d.groups, added, { recentLimit: limit, recentShown: Math.min(limit, this.recent.length), recentHasMore: this.recent.length > limit }));
+  },
   add() { ui.edit(); },
   select(e) { ui.edit(e.detail.id); },
   allBills() { ui.bills(); },
