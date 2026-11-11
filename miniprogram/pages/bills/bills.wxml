@@ -7,7 +7,7 @@
   </view>
   <view class="panel filters">
     <input class="input" value="{{query}}" placeholder="搜索备注或分类，例如：咖啡、工资" maxlength="100" bindinput="search" />
-    <view class="row filter-row"><picker mode="date" start="2000-01-01" end="{{today}}" value="{{start || today}}" bindchange="dateChange" data-field="start"><view class="chip">{{start || '开始日期'}} ▾</view></picker><text class="muted">至</text><picker mode="date" start="2000-01-01" end="{{today}}" value="{{end || today}}" bindchange="dateChange" data-field="end"><view class="chip">{{end || '结束日期'}} ▾</view></picker></view>
+    <view class="row filter-row"><picker mode="date" start="2000-01-01" end="{{end || today}}" value="{{start || end || today}}" bindchange="dateChange" data-field="start"><view class="chip">{{start || '开始日期'}} ▾</view></picker><text class="muted">至</text><picker mode="date" start="{{start || '2000-01-01'}}" end="{{today}}" value="{{end || today}}" bindchange="dateChange" data-field="end"><view class="chip">{{end || '结束日期'}} ▾</view></picker></view>
     <view class="row filter-row"><picker range="{{categoryNames}}" value="{{categoryIndex}}" bindchange="categoryChange"><view class="chip">{{categoryNames[categoryIndex] || '全部分类'}} ▾</view></picker><picker range="{{payments}}" value="{{paymentIndex}}" bindchange="paymentChange"><view class="chip">{{payments[paymentIndex]}} ▾</view></picker><text class="link" bindtap="clear">重置</text></view>
     <view class="row filter-row sort-row"><text class="muted">排序</text><picker range="{{sortNames}}" value="{{sortIndex}}" bindchange="sortChange"><view class="chip sort-chip">{{sortNames[sortIndex]}} ▾</view></picker></view>
     <view wx:if="{{sortIndex !== 0}}" class="note">按显示金额排序，支出已扣除退款；同金额按时间从近到远。</view>

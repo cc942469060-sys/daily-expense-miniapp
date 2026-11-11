@@ -12,8 +12,8 @@ Page({
   beginRemove(e) {
     if (this.data.categories.length <= 1) { ui.error(new Error('每种收支类型至少保留一个分类')); return; }
     const categoryId = e.currentTarget.dataset.id;
-    this.setData({ deletingId: categoryId, targets: this.data.categories.filter(c => c.id !== categoryId), targetIndex: 0 });
-    wx.pageScrollTo({ selector: '#migration', duration: 250 });
+    // The migration panel only exists after this update renders, so scroll in the callback.
+    this.setData({ deletingId: categoryId, targets: this.data.categories.filter(c => c.id !== categoryId), targetIndex: 0 }, () => wx.pageScrollTo({ selector: '#migration', duration: 250 }));
   },
   targetChange(e) { this.setData({ targetIndex: Number(e.detail.value) }); },
   cancelRemove() { this.setData({ deletingId: '' }); },

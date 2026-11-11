@@ -132,7 +132,7 @@ daily-expense-miniapp/
 
 ## 开发检查
 
-在项目根目录运行（推荐 Node.js 18 或更新版本）：
+在项目根目录运行（需要 Node.js 20.11 或更新版本，推荐 22；测试用到 node:test 的 Date 模拟）。推送到 GitHub 后，每个 PR 和 main 分支都会通过 GitHub Actions 自动运行这两项检查：
 
 ```sh
 npm test
