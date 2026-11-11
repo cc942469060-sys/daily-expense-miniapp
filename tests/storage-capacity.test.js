@@ -10,12 +10,12 @@ const KEY_LIMIT = 1024 * 1024; const TOTAL_LIMIT = 10 * 1024 * 1024;
 const clone = v => v === undefined ? '' : JSON.parse(JSON.stringify(v));
 const bytes = v => Buffer.byteLength(JSON.stringify(v));
 const input = { type: 'expense', amount: '20', refund: '0', categoryId: 'food', date: '2024-02-10', time: '12:00', payment: '微信', note: '午饭' };
-let db, sizes, writes, failWrite;
+let db, sizes, writes, failWrite, io;
 const used = () => [...sizes.values()].reduce((a, b) => a + b, 0);
 function put(key, value) { db.set(key, clone(value)); sizes.set(key, bytes(value)); }
 function platform() {
   global.wx = { showToast() {}, showModal(o) { if (o.success) o.success({ confirm: true }); }, navigateTo() {}, navigateBack() {}, setNavigationBarTitle() {}, pageScrollTo() {} };
-  installStorageIO(wx, db);
+  io = installStorageIO(wx, db);
   wx.getStorageSync = key => clone(db.get(key));
   wx.setStorageSync = (key, value) => {
     if (failWrite && failWrite(key)) throw new Error('setStorageSync:fail exceed storage max size 10MB');
@@ -167,4 +167,18 @@ test('存储接近上限时首页和备份页提示容量', () => {
   const home = page('home'); home.onShow(); assert.match(home.data.capacityWarning, /已用 86%/);
   const backup = page('backup'); backup.onShow(); assert.equal(backup.data.storageUsage, '8.6 MB / 10 MB'); assert.ok(backup.data.capacityWarning);
   wx.getStorageInfoSync = info; home.onShow(); assert.equal(home.data.capacityWarning, '');
+});
+
+test('增量拼出的设备备份与账本完全一致，校验值与整份计算相同，冷启动不重写', () => {
+  store.write(ledger(1200));
+  const account = store.saveAccount({ kind: 'asset', categoryId: 'asset_bank', name: '工资卡', amount: '100', valuedOn: '2024-01-01', cardLast4: '', note: '' });
+  store.saveRecord(input); store.updateAccountValue(account.id, { amount: '120', valuedOn: '2024-02-01', note: '' });
+  store.saveRecord(Object.assign({}, input, { amount: '3.21' }), store.read().records[10].id); store.markBackup();
+  store.removeRecord(store.read().records[500].id); store.setBudget('300');
+  const copies = persistence.AUTO_FILES.map(name => JSON.parse(io.files.get('/sandbox/' + name))).sort((a, b) => b.sequence - a.sequence);
+  assert.ok(copies.every(copy => copy.checksum === persistence.checksum(copy.state)));
+  assert.equal(JSON.stringify(copies[0].state), JSON.stringify(store.read()));
+  restart(); const before = new Map(io.files);
+  store.protect(); assert.deepEqual(new Map(io.files), before);
+  assert.ok(persistence.candidates().filter(c => c.id.startsWith('file:xiaorizhang-auto')).every(c => c.valid));
 });
