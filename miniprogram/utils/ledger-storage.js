@@ -13,11 +13,15 @@ const FILE_FULL = '保存失败：设备文件空间不足，无法先备份上�
 // WeChat allows 1MB per storage key and 10MB in total. KEY therefore holds either a legacy
 // single-object ledger or a small index of immutable chunks; writing the index is the commit point.
 const CHUNK_PREFIX = 'daily-expense:chunk:';
-const CHUNK_AVERAGE = 512; const CHUNK_MIN_ITEMS = 64; const CHUNK_MAX_ITEMS = 2000;
+// About one natural boundary per 256 items, so only ~1% of chunks are cut at the size cap; a cut
+// at the cap moves when a record is deleted and forces the next chunk to be rewritten as well.
+const CHUNK_AVERAGE = 256; const CHUNK_MIN_ITEMS = 64; const CHUNK_MAX_ITEMS = 2000;
 // Measured in characters: even at 3 UTF-8 bytes each plus JSON escaping, a chunk stays below 1MB.
 const CHUNK_MAX_LENGTH = 256 * 1024;
 const STAMPS = ['updatedAt', 'lastBackupAt'];
 const CAPACITY_WARNING = 0.8;
+// Room for rewriting two full-size chunks plus the index, the worst case for one deletion or edit.
+const RESERVE = 768 * 1024;
 const MISSING = '本地账本数据异常：发现使用记录或副本，但主账本无法读取。已停止自动创建和保存，请到「我的 → 导出与备份」检查本地副本。';
 let warningOwner; let warningPending = false;
 function rememberWarning(pending) { warningOwner = wx; warningPending = pending; }
@@ -191,14 +195,17 @@ function readManifest(m, keys) {
   return state;
 }
 let chunkSequence = 0;
+function reusable(chunk, present) {
+  // Identical content that still exists is shared instead of written again.
+  const c = session();
+  for (const key of c.byHash.get(chunk.hash) || []) if (present.has(key) && c.chunks.get(key).text === chunk.text) return key;
+  return null;
+}
 function storeChunks(planned, present) {
   const written = [];
   const put = chunk => {
-    const c = session();
-    for (const key of c.byHash.get(chunk.hash) || []) {
-      // Identical content that still exists is shared instead of written again.
-      if (present.has(key) && c.chunks.get(key).text === chunk.text) return { key, hash: chunk.hash, length: chunk.length, count: chunk.count };
-    }
+    const shared = reusable(chunk, present);
+    if (shared) return { key: shared, hash: chunk.hash, length: chunk.length, count: chunk.count };
     const key = CHUNK_PREFIX + Date.now().toString(36) + '-' + (++chunkSequence).toString(36) + '-' + Math.random().toString(36).slice(2, 10);
     setItem(key, chunk.text); written.push(key);
     let actual; try { actual = wx.getStorageSync(key); } catch (e) { actual = null; }
@@ -209,9 +216,22 @@ function storeChunks(planned, present) {
   try { return { refs: { meta: put(planned.meta), records: planned.records.map(put), history: planned.history.map(put) }, written }; }
   catch (e) { discard(written); throw e; }
 }
-function chunkState(state, present) {
-  const planned = plan(state); const stored = storeChunks(planned, present);
-  return { manifest: manifestOf(planned, stored.refs, state), written: stored.written };
+function utf8Length(text) {
+  let n = 0;
+  for (let i = 0; i < text.length; i++) { const c = text.charCodeAt(i); n += c < 0x80 ? 1 : c < 0x800 ? 2 : 3; }
+  return n;
+}
+function entries(s) { return s.records.length + s.accountValueHistory.length + s.accounts.length + s.categories.length + s.assetCategories.length; }
+function reserveFor(planned, present) {
+  // Copy-on-write needs room for a rewritten chunk before the old one is freed. Additions stop
+  // while less than RESERVE would remain, so deleting and editing still fit when nearly full.
+  const c = capacity(); if (!c) return;
+  const pending = [planned.meta].concat(planned.records, planned.history).filter(chunk => !reusable(chunk, present));
+  const needed = pending.reduce((sum, chunk) => sum + utf8Length(JSON.stringify(chunk.text)), 0) + 16 * 1024;
+  if ((c.limitKB - c.usedKB) * 1024 - needed >= RESERVE) return;
+  const error = new Error(`保存失败：本地存储空间即将用满（已用 ${Math.min(100, Math.round(c.ratio * 100))}%），为保证仍能删除和修改已有记录，已暂停新增。删除和修改不受影响，请先导出 JSON 备份并保存到设备之外。`);
+  error.reserve = true;
+  throw error;
 }
 function load() {
   const c = session(); const keys = keyList(); const raw = get(KEY, keys);
@@ -390,23 +410,29 @@ function commit(input, touch = true, operation = 'save', recovering = false) {
         snapshotFile(previous.state, previous.manifest);
       }
     }
+    const present = new Set(keyList()); const planned = plan(state);
+    // Only additions are held back; restores and changes that add nothing may use the reserve.
+    if (!recovering && entries(state) > entries(previous.state)) reserveFor(planned, present);
     // Chunks are written under new keys first; the old index keeps pointing at the old ones.
-    next = chunkState(state, new Set(keyList()));
+    const stored = storeChunks(planned, present);
+    next = { manifest: manifestOf(planned, stored.refs, state), written: stored.written };
     setItem(KEY, next.manifest);
   };
   try {
     try { attempt(); }
     catch (e) {
       if (next) { discardUnreferenced(next); next = undefined; }
-      // With a full quota, free the older storage snapshot once and retry, so that edits such
-      // as deletions can still be saved. Any other failure is reported unchanged.
+      // When space runs out, free the older storage snapshot once and retry. Device files keep
+      // their own two copies. Any other failure is reported unchanged.
       let freed = false;
-      try { freed = quota(e) && reclaim(); } catch (r) { freed = false; }
+      try { freed = (quota(e) || e.reserve === true) && reclaim(); } catch (r) { freed = false; }
       if (!freed) throw e;
       attempt();
     }
   } catch (e) {
     if (next) discardUnreferenced(next);
+    // Holding back an addition is not a protection failure, so it raises no protection warning.
+    if (e.reserve === true) { log(operation, 'refused:空间预留', state); throw e; }
     rememberWarning(true);
     if (recovering || (previous && previous.raw)) log(operation, fileFull(e) ? 'failed:设备文件空间不足' : 'failed', state);
     throw new Error(fileFull(e) ? FILE_FULL : '保存失败：' + reason(e) + '。原数据未主动覆盖，请先检查或导出备份。');
@@ -492,7 +518,7 @@ function capacityText(c) { return `${(c.usedKB / 1024).toFixed(1)} MB / ${(c.lim
 function capacityWarning() {
   const c = capacity();
   if (!c || c.ratio < CAPACITY_WARNING) return '';
-  return `本地存储已用 ${Math.min(100, Math.round(c.ratio * 100))}%（${capacityText(c)}）。请导出 JSON 备份并保存到设备之外；空间用满后将无法继续保存。`;
+  return `本地存储已用 ${Math.min(100, Math.round(c.ratio * 100))}%（${capacityText(c)}）。请导出 JSON 备份并保存到设备之外；剩余空间不足约 0.75 MB 时将暂停新增，删除和修改单笔记录仍可进行。`;
 }
 function diagnostics(options) {
   const report = { inspectedAt: new Date().toISOString(), candidates: candidates(options).map(({ state, ...item }) => item), events: [] };

@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const core = require('../miniprogram/utils/core');
-const store = require('../miniprogram/utils/store');
+const store = require('../miniprogram/utils/store'); const { applySetData } = require('./helpers/set-data');
 const clone = value => value === undefined ? '' : JSON.parse(JSON.stringify(value));
 let db; let navigation;
 function record(id, date, amountCents, extra) {
@@ -12,7 +12,7 @@ function state(records) { const s = core.freshState(); s.records = records; retu
 function page(name) {
   let config; global.Page = value => { config = value; };
   const file = path.resolve(__dirname, '../miniprogram/pages/' + name + '/' + name + '.js'); delete require.cache[file]; require(file);
-  const p = { data: clone(config.data), setData(value) { Object.assign(this.data, value); } };
+  const p = { data: clone(config.data), setData(value) { applySetData(this.data, value); } };
   for (const [key, value] of Object.entries(config)) if (typeof value === 'function') p[key] = value.bind(p);
   return p;
 }
@@ -115,4 +115,19 @@ test('空结果金额排序显示空列表，无效排序选择不改变当前�
   for (const index of [-1, 3, 1.5, 'bad']) sort(p, index);
   assert.equal(p.data.sortIndex, 1); assert.equal(p.data.hasMore, false);
   sort(p, 2); assert.deepEqual(p.data.groups, []); assert.equal(p.data.totalText, '0.00');
+});
+
+test('加载更多只追加新的一页，结果与一次性加载相同，滑到底自动加载', () => {
+  // Three days of 90 records each place page boundaries inside a day.
+  const days = ['2024-01-03', '2024-01-02', '2024-01-01'];
+  const records = Array.from({ length: 250 }, (_, i) => record('r' + String(i).padStart(3, '0'), days[Math.floor(i / 90)], 100 + i, { createdAt: 1000 - i }));
+  const p = bills(records); const payloads = []; const set = p.setData; p.setData = v => { payloads.push(v); set.call(p, v); };
+  p.onReachBottom(); p.more();
+  assert.equal(p.data.shown, 250); assert.equal(p.data.hasMore, false);
+  assert.ok(payloads.every(v => !('groups' in v)));
+  assert.ok(payloads.every(v => Object.keys(v).filter(k => k.startsWith('groups')).length <= 103));
+  const full = bills(records); full.setData({ limit: 300 }); full.refresh();
+  assert.deepEqual(p.data.groups, full.data.groups); assert.equal(p.data.groups.length, 3);
+  assert.ok(!('createdAt' in visible(p)[0]) && !('categoryId' in visible(p)[0]));
+  p.more(); assert.equal(payloads.length, 2);
 });

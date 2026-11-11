@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const core = require('../miniprogram/utils/core');
-const store = require('../miniprogram/utils/store');
+const store = require('../miniprogram/utils/store'); const { applySetData } = require('./helpers/set-data');
 const dates = require('../miniprogram/utils/date');
 let db; let failKey; let navigation; let errors;
 const clone = v => v === undefined ? '' : JSON.parse(JSON.stringify(v));
@@ -23,7 +23,7 @@ function page(name) {
   let config; global.Page = value => { config = value; };
   const file = path.resolve(__dirname, '../miniprogram/pages/' + name + '/' + name + '.js');
   delete require.cache[file]; require(file);
-  const p = { data: clone(config.data), setData(value) { Object.assign(this.data, value); } };
+  const p = { data: clone(config.data), setData(value) { applySetData(this.data, value); } };
   for (const [key, value] of Object.entries(config)) if (typeof value === 'function') p[key] = value.bind(p);
   return p;
 }
