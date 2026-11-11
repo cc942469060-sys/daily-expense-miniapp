@@ -31,7 +31,7 @@ test('失败保留原始错误，重试使用相同文件且不生成额外文�
   const names = [...io.files.keys()].filter(k=>k.includes('xiaorizhang-backup-'));
   behavior = 'shareFileMessage:fail can only be invoked by user TAP gesture'; await send(p);
   assert.equal(p.data.sendError,behavior); assert.equal(p.data.busy,false); assert.equal(store.read().lastBackupAt,'');
-  assert.equal(JSON.parse(p.data.diagnosticText).fileSend.error,behavior);
+  assert.equal(JSON.parse(p.diagnosticText).fileSend.error,behavior);
   behavior = 'success'; await send(p); assert.equal(calls[1].filePath,path); assert.equal(io.files.get(path),content);
   assert.deepEqual([...io.files.keys()].filter(k=>k.includes('xiaorizhang-backup-')),names);
 });
@@ -50,7 +50,7 @@ test('同步抛错和路径错误不会卡住页面，诊断不暴露本地文�
   const p=page(); await p.exportFile('json'); behavior='throw'; await send(p);
   assert.match(p.data.sendError,/native exception/); assert.equal(p.data.busy,false);
   behavior='shareFileMessage:fail cannot read '+p.pendingFile.path; await send(p);
-  assert.ok(!JSON.parse(p.data.diagnosticText).fileSend.error.includes(p.pendingFile.path)); assert.match(p.data.sendError,/本地文件/);
+  assert.ok(!JSON.parse(p.diagnosticText).fileSend.error.includes(p.pendingFile.path)); assert.match(p.data.sendError,/本地文件/);
 });
 test('生成失败不覆盖上一份待发送文件，返回页面仍能重试', async () => {
   const p=page(); await p.exportFile('json'); const old=p.pendingFile;

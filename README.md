@@ -5,8 +5,8 @@
 ## 如何运行
 
 1. 打开微信开发者工具，选择「导入项目」。
-2. 导入整个 `daily-expense-miniapp` 文件夹，也就是包含 `project.config.json` 的目录；不要单独导入 `miniprogram`。
-3. 项目默认使用 `touristappid`。可在工具支持时选择测试号/游客模式进行本地调试；真机预览、上传和发布请换成自己的小程序 AppID。
+2. 导入整个 `daily-expense-miniapp` 文件夹，也就是包含 `project.config.json` 的目录；不要单独导入 `miniprogram`。`miniprogram/` 里另有一份 `project.config.json`，只在单独导入该目录时生效，按本步骤导入时不使用。
+3. `project.config.json` 当前填写的 AppID 为 `wx422617780bbbaa86`。没有这个小程序的开发权限时，把其中的 `appid` 改成自己的小程序 AppID；仅做本地调试也可在工具支持时改用测试号/游客模式。真机预览、上传和发布必须使用自己有权限的 AppID。
 4. 后端服务选择「不使用云服务」，点击编译。无需 npm install，也无需构建 npm。
 5. 正式发布前，在微信公众平台完善名称、类目等资料，使用真实 AppID 预览并完成真机验收后，再按平台流程提交审核。
 
@@ -125,7 +125,7 @@ daily-expense-miniapp/
 │  │  ├─ mine/                设置和预算
 │  │  ├─ categories/          分类及迁移
 │  │  └─ backup/              导出与恢复
-│  └─ utils/                  金额、日期、统计、存储、文件接口
+│  └─ utils/                  金额、日期、统计、存储、文件接口、两个分类页的共享逻辑
 ├─ scripts/                  结构检查、原生编译检查、图标生成
 └─ tests/                    业务与模拟页面流程测试
 ```

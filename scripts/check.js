@@ -6,7 +6,10 @@ for (const file of walk(root)) {
   if (file.endsWith('.json')) JSON.parse(fs.readFileSync(file, 'utf8'));
   if (file.endsWith('.js')) cp.execFileSync(process.execPath, ['--check', file], { stdio: 'pipe' });
   if (!file.endsWith('.wxml')) continue;
-  const js = fs.readFileSync(file.replace(/\.wxml$/, '.js'), 'utf8'); const wxml = fs.readFileSync(file, 'utf8'); const stack = [];
+  const script = file.replace(/\.wxml$/, '.js'); const own = fs.readFileSync(script, 'utf8');
+  // Handlers may also come from a shared page module (utils/*-page.js) that the page requires.
+  const js = [own, ...[...own.matchAll(/require\('([^']+-page)'\)/g)].map(m => fs.readFileSync(path.resolve(path.dirname(script), `${m[1]}.js`), 'utf8'))].join('\n');
+  const wxml = fs.readFileSync(file, 'utf8'); const stack = [];
   for (const match of wxml.matchAll(/<\/?[a-z][^>]*>/g)) {
     const tag = match[0]; const name = tag.match(/^<\/?([\w-]+)/)[1];
     if (tag.startsWith('</')) assert(stack.pop() === name, `${file}: 标签 ${name} 未配对`);
