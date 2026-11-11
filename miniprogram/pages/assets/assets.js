@@ -11,9 +11,9 @@ Page({
       const groups = s.assetCategories.map(c => {
         const accounts = selected.filter(a => a.categoryId === c.id).sort((a, b) => b.updatedAt - a.updatedAt);
         const cents = accounts.reduce((n, a) => n + a.amountCents, 0); const base = c.kind === 'asset' ? totals.assetCents : totals.liabilityCents;
-        return { id: c.id, kind: c.kind, name: c.name, icon: c.icon, amountText: hidden ? '••••' : assets.money(cents), percent: hidden || !base ? '' : (cents / base * 100).toFixed(1), accounts: accounts.map(a => assets.displayAccount(s, a)) };
+        return { id: c.id, kind: c.kind, name: c.name, icon: c.icon, amountText: hidden ? '••••' : assets.moneyText(cents), percent: hidden || !base ? '' : (cents / base * 100).toFixed(1), accounts: accounts.map(a => assets.displayAccount(s, a)) };
       }).filter(c => c.accounts.length);
-      this.setData({ hidden, groups, categories, categoryId, categoryIndex, assetText: hidden ? '••••' : assets.money(totals.assetCents), liabilityText: hidden ? '••••' : assets.money(totals.liabilityCents), netText: hidden ? '••••' : assets.money(totals.netCents), count: selected.length, archivedCount: s.accounts.filter(a => a.archivedAt !== null).length, storageError: '' });
+      this.setData({ hidden, groups, categories, categoryId, categoryIndex, assetText: hidden ? '••••' : assets.moneyText(totals.assetCents), liabilityText: hidden ? '••••' : assets.moneyText(totals.liabilityCents), netText: hidden ? '••••' : assets.moneyText(totals.netCents), count: selected.length, archivedCount: s.accounts.filter(a => a.archivedAt !== null).length, storageError: '' });
     } catch (e) { this.setData({ groups: [], assetText: '—', liabilityText: '—', netText: '—', count: 0, storageError: e.message }); }
   },
   toggleHidden() { ui.run(() => { store.setAssetAmountsHidden(!this.data.hidden); this.refresh(); }); },

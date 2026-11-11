@@ -1,4 +1,5 @@
 const dates = require('./date');
+const { money, moneyText, amountInput, parseCents } = require('./money');
 const KINDS = ['asset', 'liability'];
 const MAX_CENTS = 99999999999;
 const MAX_ACCOUNTS = 200;
@@ -16,7 +17,6 @@ function initialFields() {
   return { assetCategories: DEFAULT_CATEGORIES.map(c => Object.assign({}, c)), accounts: [], accountValueHistory: [] };
 }
 function id(prefix) { return prefix + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10); }
-function money(cents) { return (cents / 100).toFixed(2); }
 function validId(v) { return typeof v === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test(v); }
 function validCents(v) { return Number.isSafeInteger(v) && v >= 0 && v <= MAX_CENTS; }
 function timestamp(v) { return Number.isSafeInteger(v) && v >= 0; }
@@ -26,10 +26,9 @@ function checkDate(value, entering = true) {
   if (entering && value > dates.dateKey(new Date())) throw new Error('金额日期须在 2000 年起至今天之间');
 }
 function amountToCents(value) {
-  const raw = String(value).trim();
-  if (!/^\d{1,9}(\.\d{1,2})?$/.test(raw)) throw new Error('请输入 0—999,999,999.99 元的金额，最多两位小数');
-  const parts = raw.split('.');
-  const cents = Number(parts[0]) * 100 + Number((parts[1] || '').padEnd(2, '0'));
+  const raw = amountInput(value);
+  if (!/^(\d{1,9}(\.\d{0,2})?|\.\d{1,2})$/.test(raw)) throw new Error('请输入 0—999,999,999.99 元的金额，最多两位小数');
+  const cents = parseCents(raw);
   if (!validCents(cents)) throw new Error('账户金额超出支持范围');
   return cents;
 }
@@ -95,7 +94,7 @@ function summary(s) {
 function valueLabel(kind, categoryId) { return kind === 'liability' ? '当前欠款' : ['asset_stock', 'asset_gold', 'asset_fund', 'asset_bond'].includes(categoryId) ? '当前市值／估值' : '当前余额'; }
 function displayAccount(s, a) {
   const c = s.assetCategories.find(c => c.id === a.categoryId);
-  return { id: a.id, kind: a.kind, categoryId: a.categoryId, name: a.name, note: a.note, cardLast4: a.cardLast4, valuedOn: a.valuedOn, archived: a.archivedAt !== null, icon: c.icon, color: c.color, categoryName: c.name, amountText: s.settings.assetAmountsHidden ? '••••' : money(a.amountCents), stale: a.archivedAt === null && dates.dayCount(a.valuedOn, dates.dateKey(new Date())) > 31 };
+  return { id: a.id, kind: a.kind, categoryId: a.categoryId, name: a.name, note: a.note, cardLast4: a.cardLast4, valuedOn: a.valuedOn, archived: a.archivedAt !== null, icon: c.icon, color: c.color, categoryName: c.name, amountText: s.settings.assetAmountsHidden ? '••••' : moneyText(a.amountCents), stale: a.archivedAt === null && dates.dayCount(a.valuedOn, dates.dateKey(new Date())) > 31 };
 }
 function csv(s) {
   const cell = v => { let str = String(v); if (/^[\s]*[=+\-@\t\r]/.test(str)) str = "'" + str; return '"' + str.replace(/"/g, '""') + '"'; };
@@ -103,4 +102,4 @@ function csv(s) {
   s.accounts.forEach(a => rows.push([a.kind === 'asset' ? '资产' : '负债', s.assetCategories.find(c => c.id === a.categoryId).name, a.name, money(a.amountCents), a.valuedOn, a.archivedAt === null ? '使用中' : '已归档', a.cardLast4, a.note]));
   return '\uFEFF' + rows.map(row => row.map(cell).join(',')).join('\r\n');
 }
-module.exports = { KINDS, COLORS, MAX_CENTS, MAX_ACCOUNTS, MAX_HISTORY, DEFAULT_CATEGORIES, initialFields, validateState, amountToCents, money, id, accountInfo, createAccount, valueEntry, summary, valueLabel, displayAccount, csv };
+module.exports = { KINDS, COLORS, MAX_CENTS, MAX_ACCOUNTS, MAX_HISTORY, DEFAULT_CATEGORIES, initialFields, validateState, amountToCents, money, moneyText, id, accountInfo, createAccount, valueEntry, summary, valueLabel, displayAccount, csv };

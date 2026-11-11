@@ -45,14 +45,14 @@ test('混合收支汇总、分类占比和趋势按类型计算', () => {
   store.saveRecord(input({ amount: '2200', refund: '200' }));
   const s = store.read(); const summary = core.summarize(s.records);
   assert.equal(summary.incomeCents, 820000); assert.equal(summary.expenseCents, 200000);
-  assert.equal(summary.balanceText, '6200.00'); assert.equal(summary.refundCents, 20000);
+  assert.equal(summary.balanceText, '6,200.00'); assert.equal(summary.refundCents, 20000);
   const expense = core.statistics(s, 'month', '2024-02-10', '2024-03-01', 'expense');
   const received = core.statistics(s, 'month', '2024-02-10', '2024-03-01', 'income');
-  assert.equal(expense.totalText, '2000.00'); assert.equal(expense.count, 1);
+  assert.equal(expense.totalText, '2,000.00'); assert.equal(expense.count, 1);
   assert.equal(expense.categories[0].percent, '100.0'); assert.equal(expense.bars[9].cents, 200000);
-  assert.equal(received.totalText, '8200.00'); assert.equal(received.count, 2);
+  assert.equal(received.totalText, '8,200.00'); assert.equal(received.count, 2);
   assert.equal(received.categories[0].percent, '97.6'); assert.equal(received.bars[9].cents, 820000);
-  assert.equal(received.maxText, '8000.00'); assert.equal(received.refundCents, 0);
+  assert.equal(received.maxText, '8,000.00'); assert.equal(received.refundCents, 0);
   assert.deepEqual(received.summary, expense.summary);
 });
 
@@ -224,22 +224,22 @@ test('页面收入完整流程：首页预算、统计钻取、明细、编辑�
   record.setData({ amount: '8000', note: '工资' }); record.save();
   const id = store.read().records.find(r => r.type === 'income').id;
   const home = page('home'); home.onShow();
-  assert.equal(home.data.monthSummary.balanceText, '5800.00'); assert.equal(home.data.remainingText, '800.00');
+  assert.equal(home.data.monthSummary.balanceText, '5,800.00'); assert.equal(home.data.remainingText, '800.00');
   assert.equal(home.data.budgetPercent, 73); assert.equal(home.data.count, 2);
   home.monthBills(event('income')); assert.match(navigation.pop(), /type=income/);
   home.todayBills(event('income')); assert.match(navigation.pop(), /type=income/);
   const stats = page('stats'); stats.onShow(); stats.typeChange(event('income'));
-  assert.equal(stats.data.stats.totalText, '8000.00'); assert.equal(stats.data.stats.count, 1);
+  assert.equal(stats.data.stats.totalText, '8,000.00'); assert.equal(stats.data.stats.count, 1);
   stats.allBills(); assert.match(navigation.pop(), /type=income/);
   stats.barBills({ currentTarget: { dataset: { start: today, end: today } } }); assert.match(navigation.pop(), /type=income/);
   stats.categoryBills({ currentTarget: { dataset: { id: 'income_salary' } } }); assert.match(navigation.pop(), /type=income/);
   const bills = page('bills'); bills.onLoad({ type: 'income' }); bills.onShow();
-  assert.equal(bills.data.count, 1); assert.equal(bills.data.totalText, '8000.00');
+  assert.equal(bills.data.count, 1); assert.equal(bills.data.totalText, '8,000.00');
   bills.add(); assert.match(navigation.pop(), /type=income/);
   const edit = page('record'); edit.onLoad({ id }); assert.equal(edit.data.type, 'income');
   edit.setData({ amount: '8500' }); edit.save(); home.onShow();
-  assert.equal(home.data.monthSummary.balanceText, '6300.00'); assert.equal(home.data.remainingText, '800.00');
-  edit.remove(); home.onShow(); assert.equal(home.data.monthSummary.balanceText, '-2200.00');
+  assert.equal(home.data.monthSummary.balanceText, '6,300.00'); assert.equal(home.data.remainingText, '800.00');
+  edit.remove(); home.onShow(); assert.equal(home.data.monthSummary.balanceText, '-2,200.00');
   assert.deepEqual(errors, ['删除后对应统计会立即更新，此操作无法撤销。']);
 });
 

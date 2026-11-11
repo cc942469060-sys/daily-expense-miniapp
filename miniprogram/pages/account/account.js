@@ -18,7 +18,7 @@ Page({
       const history = a ? s.accountValueHistory.filter(h => h.accountId === a.id).reverse() : [];
       const historyPages = Math.max(1, Math.ceil(history.length / 50)); const historyPage = Math.min(this.data.historyPage, historyPages);
       this.setData({ kind, categories, categoryIndex, hidden, account: a ? assets.displayAccount(s, a) : null, label: assets.valueLabel(kind, categories[categoryIndex].id), minDate: a ? a.valuedOn : '2000-01-01', today: dates.dateKey(new Date()), historyPage, historyPages, historyCount: history.length, canDelete: history.length === 1, hasMore: historyPage < historyPages,
-        history: history.slice((historyPage - 1) * 50, historyPage * 50).map(h => ({ id: h.id, valuedOn: h.valuedOn, recordedText: dates.dateKey(new Date(h.recordedAt)) + ' ' + dates.timeKey(new Date(h.recordedAt)), opening: h.reason === 'opening', amountText: hidden ? '••••' : assets.money(h.amountCents), previousText: hidden ? '••••' : h.previousCents === null ? '—' : assets.money(h.previousCents), changeText: hidden ? '••••' : h.previousCents === null ? '初始金额' : (h.amountCents - h.previousCents > 0 ? '+' : '') + assets.money(h.amountCents - h.previousCents), note: h.note })), storageError: '' });
+        history: history.slice((historyPage - 1) * 50, historyPage * 50).map(h => ({ id: h.id, valuedOn: h.valuedOn, recordedText: dates.dateKey(new Date(h.recordedAt)) + ' ' + dates.timeKey(new Date(h.recordedAt)), opening: h.reason === 'opening', amountText: hidden ? '••••' : assets.moneyText(h.amountCents), previousText: hidden ? '••••' : h.previousCents === null ? '—' : assets.moneyText(h.previousCents), changeText: hidden ? '••••' : h.previousCents === null ? '初始金额' : (h.amountCents - h.previousCents > 0 ? '+' : '') + assets.moneyText(h.amountCents - h.previousCents), note: h.note })), storageError: '' });
       wx.setNavigationBarTitle({ title: a ? a.name : '添加资产或负债' });
     } catch (e) { this.setData({ storageError: e.message, account: null, history: [] }); }
   },
@@ -49,7 +49,7 @@ Page({
     this.setData({ busy: true });
     if (mode !== 'value') { persist(); return; }
     try { assets.amountToCents(input.amount); } catch (e) { this.setData({ busy: false }); ui.error(e); return; }
-    wx.showModal({ title: '更新当前金额？', content: `将当前金额设为 ¥${assets.money(assets.amountToCents(input.amount))}，金额日期 ${input.valuedOn}。本次更新会保留历史。`, confirmText: '确认更新', success: r => { if (r.confirm) persist(); else this.setData({ busy: false }); }, fail: () => this.setData({ busy: false }) });
+    wx.showModal({ title: '更新当前金额？', content: `将当前金额设为 ¥${assets.moneyText(assets.amountToCents(input.amount))}，金额日期 ${input.valuedOn}。本次更新会保留历史。`, confirmText: '确认更新', success: r => { if (r.confirm) persist(); else this.setData({ busy: false }); }, fail: () => this.setData({ busy: false }) });
   },
   moreHistory() { if (this.data.hasMore) { this.setData({ historyPage: this.data.historyPage + 1 }); this.refresh(); wx.pageScrollTo({ selector: '#history', duration: 200 }); } },
   previousHistory() { if (this.data.historyPage > 1) { this.setData({ historyPage: this.data.historyPage - 1 }); this.refresh(); wx.pageScrollTo({ selector: '#history', duration: 200 }); } },

@@ -1,5 +1,6 @@
 const dates = require('./date');
 const assets = require('./assets');
+const { money, moneyText, amountInput, parseCents } = require('./money');
 const TYPES = ['expense', 'income'];
 const PAYMENTS = ['未指定', '微信', '支付宝', '银行卡', '现金', '其他'];
 const COLORS = ['#39775B', '#DB9D4F', '#718EC3', '#B98BC2', '#D58075', '#599CA0', '#8D9970', '#899096'];
@@ -11,13 +12,12 @@ function freshState() {
   return Object.assign({ version: 3, categories: DEFAULT_CATEGORIES.concat(INCOME_CATEGORIES).map(c => Object.assign({}, c)), records: [], settings: { budgetCents: 0, expenseCategoryRevision: 1, assetAmountsHidden: false }, updatedAt: '', lastBackupAt: '' }, assets.initialFields());
 }
 function amountToCents(value, allowZero) {
-  const raw = String(value).trim();
-  if (!/^\d{1,7}(\.\d{1,2})?$/.test(raw)) throw new Error('请输入金额，最多保留两位小数');
-  const parts = raw.split('.'); const cents = Number(parts[0]) * 100 + Number((parts[1] || '').padEnd(2, '0'));
+  const raw = amountInput(value);
+  if (!/^(\d{1,7}(\.\d{0,2})?|\.\d{1,2})$/.test(raw)) throw new Error('请输入金额，最多保留两位小数');
+  const cents = parseCents(raw);
   if (cents > MAX_CENTS || cents < (allowZero ? 0 : 1)) throw new Error('金额须在 0.01—9,999,999.99 元之间');
   return cents;
 }
-function money(cents) { return (cents / 100).toFixed(2); }
 function id(prefix) { return prefix + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10); }
 function validate(s, version) {
   if (!s || s.version !== version || !Array.isArray(s.categories) || !Array.isArray(s.records)) throw new Error('备份格式或版本不支持');
@@ -97,7 +97,7 @@ function summarize(records) {
     else { s.expenseCents += net(r); s.grossExpenseCents += r.amountCents; s.refundCents += r.refundCents; s.expenseCount++; }
   });
   s.balanceCents = s.incomeCents - s.expenseCents;
-  s.incomeText = money(s.incomeCents); s.expenseText = money(s.expenseCents); s.balanceText = money(s.balanceCents);
+  s.incomeText = moneyText(s.incomeCents); s.expenseText = moneyText(s.expenseCents); s.balanceText = moneyText(s.balanceCents);
   return s;
 }
 // A total always describes one direction; mixed views use summarize().
@@ -117,7 +117,7 @@ function filterRecords(state, filter) {
 }
 function decorate(state, r) {
   const c = state.categories.find(c => c.id === r.categoryId); const cents = net(r);
-  return Object.assign({}, r, { categoryName: c.name, icon: c.icon, color: c.color, typeName: r.type === 'income' ? '收入' : '支出', sign: cents ? (r.type === 'income' ? '+' : '−') : '', amountText: money(cents), originalText: money(r.amountCents), refundText: money(r.refundCents) });
+  return Object.assign({}, r, { categoryName: c.name, icon: c.icon, color: c.color, typeName: r.type === 'income' ? '收入' : '支出', sign: cents ? (r.type === 'income' ? '+' : '−') : '', amountText: moneyText(cents), originalText: moneyText(r.amountCents), refundText: moneyText(r.refundCents) });
 }
 function groups(state, records, fullRecords, type) {
   const days = {};
@@ -177,14 +177,14 @@ function statistics(state, mode, anchor, today, type = 'expense', customRange) {
   const days = effectiveEnd < bounds.start ? 1 : dates.dayCount(bounds.start, effectiveEnd);
   const categories = state.categories.filter(c => c.type === type).map(c => {
     const cents = total(records.filter(r => r.categoryId === c.id), type);
-    return Object.assign({}, c, { cents, amountText: money(cents), percent: sum ? (cents / sum * 100).toFixed(1) : '0.0', width: sum ? Math.round(cents / sum * 100) : 0 });
+    return Object.assign({}, c, { cents, amountText: moneyText(cents), percent: sum ? (cents / sum * 100).toFixed(1) : '0.0', width: sum ? Math.round(cents / sum * 100) : 0 });
   }).filter(c => c.cents > 0).sort((a, b) => b.cents - a.cents);
   const { bars, granularity } = statisticsBars(records, mode, bounds);
   const peak = Math.max(1, ...bars.map(b => b.cents));
-  bars.forEach(b => { b.height = b.cents ? Math.max(3, Math.round(b.cents / peak * 100)) : 0; b.amountText = money(b.cents); });
+  bars.forEach(b => { b.height = b.cents ? Math.max(3, Math.round(b.cents / peak * 100)) : 0; b.amountText = moneyText(b.cents); });
   const top = records.slice().sort((a, b) => net(b) - net(a)).slice(0, 3).map(r => decorate(state, r));
   const label = mode === 'all' || mode === 'custom' ? bounds.start.replace(/-/g, '/') + ' — ' + bounds.end.replace(/-/g, '/') : dates.periodLabel(mode, anchor);
-  return { type, summary, start: bounds.start, end: bounds.end, label, granularity, granularityLabel: { day: '按日汇总', month: '按月汇总', year: '按年汇总' }[granularity], totalText: money(sum), grossText: money(gross), refundText: money(refunded), refundCents: refunded, count: records.length, averageText: money(Math.round(sum / days)), maxText: top.length ? top[0].amountText : '0.00', days, categories, bars, peakText: money(!sum ? 0 : peak), top };
+  return { type, summary, start: bounds.start, end: bounds.end, label, granularity, granularityLabel: { day: '按日汇总', month: '按月汇总', year: '按年汇总' }[granularity], totalText: moneyText(sum), grossText: moneyText(gross), refundText: moneyText(refunded), refundCents: refunded, count: records.length, averageText: moneyText(Math.round(sum / days)), maxText: top.length ? top[0].amountText : '0.00', days, categories, bars, peakText: moneyText(!sum ? 0 : peak), top };
 }
 function createRecord(state, input, previous) {
   const now = Date.now(); const type = input.type;
@@ -207,4 +207,13 @@ function csv(state, records) {
   (records || filterRecords(state)).forEach(r => { const c = state.categories.find(c => c.id === r.categoryId); rows.push([r.date, r.time, r.type === 'income' ? '收入' : '支出', c.name, money(r.amountCents), r.type === 'income' ? '' : money(r.refundCents), money(net(r)), r.payment, r.note]); });
   return '\uFEFF' + rows.map(row => row.map(cell).join(',')).join('\r\n');
 }
-module.exports = { TYPES, PAYMENTS, COLORS, DEFAULT_CATEGORIES, INCOME_CATEGORIES, freshState, amountToCents, money, id, validateState, upgradeExpenseCategories, migrateState, net, summarize, total, filterRecords, decorate, groups, statistics, createRecord, csv };
+const BACKUP_REMINDER_DAYS = 30;
+// Whole days since the last JSON backup was sent, or since the first record or account was
+// created if none was ever sent. Null for an empty ledger, which has nothing to back up.
+function backupAge(state, now) {
+  const sent = Date.parse(state.lastBackupAt || '');
+  if (Number.isFinite(sent)) return { days: Math.floor((now - sent) / 86400000), sent: true };
+  const first = Math.min(...[state.records, state.accounts].map(list => list.reduce((min, item) => Math.min(min, item.createdAt), Infinity)));
+  return Number.isFinite(first) ? { days: Math.floor((now - first) / 86400000), sent: false } : null;
+}
+module.exports = { TYPES, PAYMENTS, COLORS, DEFAULT_CATEGORIES, INCOME_CATEGORIES, BACKUP_REMINDER_DAYS, freshState, amountToCents, money, moneyText, id, validateState, upgradeExpenseCategories, migrateState, net, summarize, total, filterRecords, decorate, groups, statistics, createRecord, csv, backupAge };

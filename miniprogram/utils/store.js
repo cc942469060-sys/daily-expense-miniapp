@@ -90,6 +90,16 @@ function restoreCandidate(id, token) {
   return restore(item.state);
 }
 function markBackup() { const s = read(); s.lastBackupAt = new Date().toISOString(); write(s); }
+// A home-page nudge after 30 days without a sent backup. The snooze is a UI preference kept
+// outside the ledger and written only when the user taps "later".
+const REMINDER_KEY = 'daily-expense:reminder:v1';
+function backupReminder(s, now = Date.now()) {
+  const age = core.backupAge(s, now);
+  if (!age || age.days < core.BACKUP_REMINDER_DAYS) return '';
+  try { const snooze = wx.getStorageSync(REMINDER_KEY); if (snooze && now < Number(snooze.backupUntil)) return ''; } catch (e) { /* show the reminder */ }
+  return (age.sent ? `已经 ${age.days} 天没有发送新的备份了。` : `已经记账 ${age.days} 天，还没有发送过备份。`) + '建议生成 JSON 备份并保存到设备之外，换手机或删除小程序后可以用它恢复。';
+}
+function snoozeBackupReminder(now = Date.now()) { wx.setStorageSync(REMINDER_KEY, { backupUntil: now + 7 * 86400000 }); }
 function accountIn(s, accountId) {
   const account = s.accounts.find(a => a.id === accountId);
   if (!account) throw new Error('账户已不存在');
@@ -156,4 +166,4 @@ function removeAssetCategory(categoryId, targetId) {
   s.accounts.forEach(a => { if (a.categoryId === categoryId) a.categoryId = targetId; });
   s.assetCategories = s.assetCategories.filter(c => c.id !== categoryId); write(s);
 }
-module.exports = { KEY, SAFETY_KEY, V2_KEY, V2_SAFETY_KEY, LEGACY_KEY, LEGACY_SAFETY_KEY, read, write, saveRecord, removeRecord, saveCategory, removeCategory, setBudget, parseBackup, backupText, prepareBackup, restore, hasSafety, restoreSafety, markBackup, saveAccount, updateAccountValue, archiveAccount, removeAccount, setAssetAmountsHidden, saveAssetCategory, removeAssetCategory, protect: persistence.protect, diagnostics: persistence.diagnostics, protectionWarning: persistence.protectionWarning, capacity: persistence.capacity, capacityText: persistence.capacityText, capacityWarning: persistence.capacityWarning, removeExports: persistence.removeExports, recoveryCandidate, restoreCandidate };
+module.exports = { KEY, SAFETY_KEY, REMINDER_KEY, backupReminder, snoozeBackupReminder, V2_KEY, V2_SAFETY_KEY, LEGACY_KEY, LEGACY_SAFETY_KEY, read, write, saveRecord, removeRecord, saveCategory, removeCategory, setBudget, parseBackup, backupText, prepareBackup, restore, hasSafety, restoreSafety, markBackup, saveAccount, updateAccountValue, archiveAccount, removeAccount, setAssetAmountsHidden, saveAssetCategory, removeAssetCategory, protect: persistence.protect, diagnostics: persistence.diagnostics, protectionWarning: persistence.protectionWarning, capacity: persistence.capacity, capacityText: persistence.capacityText, capacityWarning: persistence.capacityWarning, removeExports: persistence.removeExports, recoveryCandidate, restoreCandidate };

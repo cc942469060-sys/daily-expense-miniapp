@@ -166,21 +166,21 @@ test('资产 CSV 使用真实金额含归档，转义中文换行引号和公式
 
 test('账户页面创建、编辑、金额更新、取消与写入失败保留输入', () => {
   const p = page('account'); p.setData({ name: '工资卡', amount: '1000', valuedOn: '2024-02-29' }); p.save();
-  assert.equal(p.data.mode, 'detail'); assert.equal(p.data.account.amountText, '1000.00'); const id = p.data.accountId;
+  assert.equal(p.data.mode, 'detail'); assert.equal(p.data.account.amountText, '1,000.00'); const id = p.data.accountId;
   p.edit(); p.setData({ name: '新名称', categoryIndex: 3 }); p.save(); assert.equal(p.data.account.categoryName, '股票'); assert.equal(p.data.label, '当前市值／估值'); assert.equal(p.data.historyCount, 1);
   p.beginUpdate(); p.setData({ amount: '1200', valuedOn: '2024-03-01' }); confirm = false; p.save(); assert.equal(p.data.mode, 'value'); assert.equal(store.read().accounts[0].amountCents, 100000); assert.equal(p.data.busy, false);
   confirm = true; failKey = store.KEY; p.save(); assert.equal(p.data.amount, '1200'); assert.equal(p.data.mode, 'value'); assert.equal(p.data.busy, false); assert.match(modals.at(-1).content, /保存失败/);
-  failKey = ''; p.save(); assert.equal(p.data.mode, 'detail'); assert.equal(p.data.historyCount, 2); assert.equal(p.data.account.amountText, '1200.00'); assert.equal(p.data.history[0].changeText, '+200.00');
+  failKey = ''; p.save(); assert.equal(p.data.mode, 'detail'); assert.equal(p.data.historyCount, 2); assert.equal(p.data.account.amountText, '1,200.00'); assert.equal(p.data.history[0].changeText, '+200.00');
   p.beginUpdate(); p.setData({ amount: '9999' }); p.cancel(); assert.equal(p.data.amount, ''); assert.equal(store.read().accounts.find(a => a.id === id).amountCents, 120000);
 });
 
 test('资产页筛选不改变全局合计，金额隐藏覆盖列表详情历史和占比且重进保留', () => {
   const a = store.saveAccount(input({ amount: '160000' })); store.saveAccount(input({ kind: 'liability', categoryId: 'debt_credit', amount: '60000' }));
-  const p = page('assets'); assert.equal(p.data.netText, '100000.00'); p.kindChange(event({ kind: 'liability' })); assert.equal(p.data.count, 1); assert.equal(p.data.netText, '100000.00'); assert.equal(p.data.groups[0].percent, '100.0');
+  const p = page('assets'); assert.equal(p.data.netText, '100,000.00'); p.kindChange(event({ kind: 'liability' })); assert.equal(p.data.count, 1); assert.equal(p.data.netText, '100,000.00'); assert.equal(p.data.groups[0].percent, '100.0');
   p.toggleHidden(); assert.equal(p.data.netText, '••••'); assert.equal(p.data.groups[0].amountText, '••••'); assert.equal(p.data.groups[0].percent, ''); assert.equal(p.data.groups[0].accounts[0].amountText, '••••');
-  assert.ok(!JSON.stringify(p.data).includes('60000')); const detail = page('account', { id: a.id }); assert.equal(detail.data.account.amountText, '••••'); assert.equal(detail.data.history[0].amountText, '••••'); assert.ok(!JSON.stringify(detail.data).includes('160000'));
-  detail.beginUpdate(); assert.equal(detail.data.amount, '160000.00'); detail.cancel(); assert.equal(detail.data.amount, ''); assert.ok(!JSON.stringify(detail.data).includes('160000')); assert.equal(page('assets').data.hidden, true);
-  detail.toggleHidden(); assert.equal(detail.data.history[0].amountText, '160000.00');
+  assert.ok(!JSON.stringify(p.data).includes('60000') && !JSON.stringify(p.data).includes('60,000')); const detail = page('account', { id: a.id }); assert.equal(detail.data.account.amountText, '••••'); assert.equal(detail.data.history[0].amountText, '••••'); assert.ok(!JSON.stringify(detail.data).includes('160000') && !JSON.stringify(detail.data).includes('160,000'));
+  detail.beginUpdate(); assert.equal(detail.data.amount, '160000.00'); detail.cancel(); assert.equal(detail.data.amount, ''); assert.ok(!JSON.stringify(detail.data).includes('160000') && !JSON.stringify(detail.data).includes('160,000')); assert.equal(page('assets').data.hidden, true);
+  detail.toggleHidden(); assert.equal(detail.data.history[0].amountText, '160,000.00');
 });
 
 test('账户历史分页、30天更新提示、归档与删除页面流程', () => {
