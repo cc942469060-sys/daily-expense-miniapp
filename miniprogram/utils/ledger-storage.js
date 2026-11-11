@@ -438,6 +438,16 @@ function protect() {
   log('protect', warnings.length ? 'degraded:' + warnings.join(',') : 'ok', loaded.state);
   return warnings;
 }
+function warm() {
+  // Fill this session's boundary and checksum caches for the current ledger in idle time after
+  // launch, so the first save does not scan the whole ledger. Cache work only; nothing is written.
+  try {
+    const loaded = load(true);
+    if (!loaded.manifest || !loaded.text) return false;
+    const state = JSON.parse(loaded.text); assemble(plan(state), state);
+    return true;
+  } catch (e) { return false; }
+}
 function reason(e) {
   const message = String((e && e.message) || '');
   if (/exceed|quota|full|空间不足/i.test(message)) return '本地空间不足（' + message + '）';
@@ -614,4 +624,4 @@ function protectionWarning() {
     return '最近一次保存或备份保护未完整完成，请检查本地副本，并将有效 JSON 备份保存到设备之外。' + space;
   } catch (e) { return '无法检查备份保护状态，请到「导出与备份」检查。'; }
 }
-module.exports = { KEY, MARKER, LOG, ERRORS, recordError, SNAPSHOTS, OLD, SAFETY, AUTO_FILES, CHUNK_PREFIX, CHUNK_MAX_LENGTH, missing, get, load, resolve, commit, protect, candidates, candidate, removeExports, diagnostics, checksum, protectionWarning, capacity, capacityText, capacityWarning };
+module.exports = { KEY, MARKER, LOG, ERRORS, recordError, warm, SNAPSHOTS, OLD, SAFETY, AUTO_FILES, CHUNK_PREFIX, CHUNK_MAX_LENGTH, missing, get, load, resolve, commit, protect, candidates, candidate, removeExports, diagnostics, checksum, protectionWarning, capacity, capacityText, capacityWarning };

@@ -1,6 +1,10 @@
 const store = require('./utils/store');
 App({
-  onLaunch() { try { store.protect(); } catch (e) { console.error('账本读取失败', e.message); } },
+  onLaunch() {
+    try { store.protect(); } catch (e) { console.error('账本读取失败', e.message); }
+    // After the first page has rendered, prepare the caches the first save would otherwise build.
+    setTimeout(() => store.warm(), 1500);
+  },
   // Unexpected errors still reach the console; they are also kept (without bill content) for
   // the diagnostic summary on the backup page.
   onError(message) { store.recordError('error', message); },
