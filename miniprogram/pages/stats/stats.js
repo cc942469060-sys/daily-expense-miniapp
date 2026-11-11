@@ -1,13 +1,13 @@
 const store = require('../../utils/store'); const core = require('../../utils/core'); const dates = require('../../utils/date'); const ui = require('../../utils/ui');
 Page({
-  data: { modes: [{ id: 'day', name: '日' }, { id: 'week', name: '周' }, { id: 'month', name: '月' }, { id: 'year', name: '年' }, { id: 'all', name: '全部' }, { id: 'custom', name: '自定义' }], mode: 'month', type: 'expense', anchor: '', today: '', customStart: '', customEnd: '', stats: null, chartWidth: 0, canNext: false, canPrev: true, storageError: '' },
+  data: { modes: [{ id: 'day', name: '日' }, { id: 'week', name: '周' }, { id: 'month', name: '月' }, { id: 'year', name: '年' }, { id: 'all', name: '全部' }, { id: 'custom', name: '自定义' }], mode: 'month', type: 'expense', anchor: '', today: '', customStart: '', customEnd: '', stats: null, selectedBar: -1, barInfo: '', chartWidth: 0, canNext: false, canPrev: true, storageError: '' },
   onShow() { const today = dates.dateKey(new Date()); this.setData({ today, anchor: this.data.anchor || today }); this.refresh(); },
   refresh() {
     try {
       const d = this.data; const stats = core.statistics(store.read(), d.mode, d.anchor, d.today, d.type, { start: d.customStart, end: d.customEnd });
       const extended = d.mode === 'all' || d.mode === 'custom';
       const barWidth = extended ? (stats.granularity === 'day' ? 80 : 120) : d.mode === 'year' ? 70 : 50;
-      this.setData({ stats, chartWidth: Math.max(620, stats.bars.length * barWidth), canNext: !extended && dates.range(d.mode, dates.shiftPeriod(d.mode, d.anchor, 1)).start <= d.today, canPrev: !extended && dates.range(d.mode, dates.shiftPeriod(d.mode, d.anchor, -1)).end >= '2000-01-01', storageError: '' });
+      this.setData({ stats, selectedBar: -1, barInfo: '', chartWidth: Math.max(620, stats.bars.length * barWidth), canNext: !extended && dates.range(d.mode, dates.shiftPeriod(d.mode, d.anchor, 1)).start <= d.today, canPrev: !extended && dates.range(d.mode, dates.shiftPeriod(d.mode, d.anchor, -1)).end >= '2000-01-01', storageError: '' });
     } catch (e) { this.setData({ storageError: e.message, stats: null }); }
   },
   typeChange(e) { const type = e.currentTarget.dataset.type; if (!core.TYPES.includes(type)) return; this.setData({ type }); this.refresh(); },
@@ -46,6 +46,15 @@ Page({
   current() { if (this.data.mode === 'all' || this.data.mode === 'custom') return; this.setData({ anchor: this.data.today }); this.refresh(); },
   allBills() { ui.bills({ type: this.data.type, start: this.data.stats.start, end: this.data.stats.end }); },
   categoryBills(e) { ui.bills({ type: this.data.type, start: this.data.stats.start, end: this.data.stats.end, categoryId: e.currentTarget.dataset.id }); },
+  barTap(e) {
+    // The first tap shows the bar's range and amount; tapping the same bar again opens its bills.
+    const index = Number(e.currentTarget.dataset.index); const bar = this.data.stats && this.data.stats.bars[index];
+    if (!bar) return;
+    if (index === this.data.selectedBar) { this.barBills(e); return; }
+    const range = (bar.start === bar.end ? bar.start : bar.start + ' — ' + bar.end).replace(/-/g, '/');
+    this.setData({ selectedBar: index, barInfo: range + ' · ' + (this.data.type === 'income' ? '收入' : '支出') + ' ¥' + bar.amountText });
+  },
+  openBar() { const bar = this.data.stats && this.data.stats.bars[this.data.selectedBar]; if (bar) ui.bills({ type: this.data.type, start: bar.start, end: bar.end }); },
   barBills(e) { ui.bills({ type: this.data.type, start: e.currentTarget.dataset.start, end: e.currentTarget.dataset.end }); },
   select(e) { ui.edit(e.currentTarget.dataset.id); }
 });
