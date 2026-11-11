@@ -29,7 +29,9 @@ function rememberWarning(pending) { warningOwner = wx; warningPending = pending;
 // for as long as the key exists; tests replace the global wx object, which resets everything.
 let cacheOwner; let cache;
 function session() {
-  if (cacheOwner !== wx) { cacheOwner = wx; cache = { chunks: new Map(), byHash: new Map(), ledger: null, files: new Map() }; }
+  // hashes/sums remember per-chunk work so a save only scans chunks that changed; bounds caches
+  // the boundary decision per record ID. Hashing in plain JS is the main cost without a JIT.
+  if (cacheOwner !== wx) { cacheOwner = wx; cache = { chunks: new Map(), byHash: new Map(), ledger: null, files: new Map(), hashes: new Map(), sums: new Map(), bounds: new Map() }; }
   return cache;
 }
 const clone = value => JSON.parse(JSON.stringify(value));
@@ -70,11 +72,11 @@ function fileEvidence() {
   try { return disk().names.some(name => AUTO_FILES.includes(name) || name === OLD_EXPORT || /^xiaorizhang-backup-.*\.json$/.test(name) || /^xiaorizhang-auto-.*\.tmp$/.test(name)); }
   catch (e) { throw new Error('无法检查设备内备份文件，已停止自动创建账本，请稍后重试'); }
 }
-function fnv(text) {
-  let hash = 2166136261;
+function fnvFrom(hash, text) {
   for (let i = 0; i < text.length; i++) hash = Math.imul(hash ^ text.charCodeAt(i), 16777619) >>> 0;
   return hash;
 }
+function fnv(text) { return fnvFrom(2166136261, text); }
 function checksumText(text) { return fnv(text).toString(16); }
 function checksum(state) { return checksumText(JSON.stringify(state)); }
 // cyrb53: a 53-bit hash for chunk and index integrity, stronger than the 32-bit envelope checksum.
@@ -89,9 +91,19 @@ function hash53(text) {
   return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
 }
 function boundary(id) {
-  let h = fnv(String(id));
+  const key = String(id); const bounds = session().bounds; const known = bounds.get(key);
+  if (known !== undefined) return known;
+  let h = fnv(key);
   h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16;
-  return (h >>> 0) % CHUNK_AVERAGE === 0;
+  const result = (h >>> 0) % CHUNK_AVERAGE === 0;
+  if (bounds.size >= 200000) bounds.clear();
+  bounds.set(key, result);
+  return result;
+}
+function hashOf(text) {
+  // Chunks that were stored or read before keep their hash; only new content is scanned.
+  const known = session().hashes.get(text);
+  return known !== undefined ? known : hash53(text);
 }
 function split(items) {
   // Boundaries depend on record IDs, not positions, so editing or deleting one record
@@ -100,7 +112,7 @@ function split(items) {
   const close = () => {
     if (!parts.length) return;
     const text = '[' + parts.join(',') + ']';
-    chunks.push({ text, hash: hash53(text), length: text.length, count: parts.length });
+    chunks.push({ text, hash: hashOf(text), length: text.length, count: parts.length });
     parts = []; length = 2;
   };
   for (const item of items) {
@@ -122,7 +134,7 @@ function plan(state) {
   for (const key of Object.keys(state)) if (key !== 'records' && key !== 'accountValueHistory' && !STAMPS.includes(key)) meta[key] = state[key];
   const text = JSON.stringify(meta);
   if (text.length > CHUNK_MAX_LENGTH) throw new Error('分类、设置或账户资料过多，无法保存');
-  const planned = { keys: Object.keys(state), meta: { text, hash: hash53(text), length: text.length, count: 1 }, records: split(state.records), history: split(state.accountValueHistory) };
+  const planned = { keys: Object.keys(state), meta: { text, hash: hashOf(text), length: text.length, count: 1 }, records: split(state.records), history: split(state.accountValueHistory) };
   planned.fingerprint = fingerprint(planned);
   return planned;
 }
@@ -147,14 +159,46 @@ function refsOf(m) {
   return refs.map(ref => ref.key);
 }
 function remember(key, text, hash) {
-  const c = session(); c.chunks.set(key, { text, hash });
+  const c = session(); c.chunks.set(key, { text, hash }); c.hashes.set(text, hash);
   if (!c.byHash.has(hash)) c.byHash.set(hash, new Set());
   c.byHash.get(hash).add(key);
 }
 function forget(key) {
   const c = session(); const entry = c.chunks.get(key); if (!entry) return;
-  c.chunks.delete(key); const keys = c.byHash.get(entry.hash);
+  c.chunks.delete(key); c.hashes.delete(entry.text); c.sums.delete(entry.text);
+  const keys = c.byHash.get(entry.hash);
   if (keys) { keys.delete(key); if (!keys.size) c.byHash.delete(entry.hash); }
+}
+function sumFrom(hash, text, inner) {
+  // Continue the FNV checksum over a chunk's items, reusing the result for a known start value.
+  const sums = session().sums; let starts = sums.get(text);
+  const known = starts && starts.get(hash);
+  if (known !== undefined) return known;
+  const after = fnvFrom(hash, inner);
+  if (!starts) { if (sums.size >= 4000) sums.clear(); starts = new Map(); sums.set(text, starts); }
+  if (starts.size >= 8) starts.clear();
+  starts.set(hash, after);
+  return after;
+}
+function assemble(planned, state) {
+  // Rebuild JSON.stringify(state) from the planned chunks together with its FNV checksum
+  // (the device file envelope format). Unchanged chunks reuse their checksum progress.
+  const out = []; let hash = 2166136261;
+  const plain = text => { out.push(text); hash = fnvFrom(hash, text); };
+  const list = chunks => {
+    plain('[');
+    chunks.forEach((chunk, i) => { if (i) plain(','); const inner = chunk.text.slice(1, -1); out.push(inner); hash = sumFrom(hash, chunk.text, inner); });
+    plain(']');
+  };
+  plain('{');
+  planned.keys.forEach((key, i) => {
+    plain((i ? ',' : '') + JSON.stringify(key) + ':');
+    if (key === 'records') list(planned.records);
+    else if (key === 'accountValueHistory') list(planned.history);
+    else plain(JSON.stringify(state[key]));
+  });
+  plain('}');
+  return { text: out.join(''), checksum: hash.toString(16) };
 }
 function discard(keys) {
   for (const key of keys) {
@@ -226,23 +270,31 @@ function reserveFor(planned, present) {
   // Copy-on-write needs room for a rewritten chunk before the old one is freed. Additions stop
   // while less than RESERVE would remain, so deleting and editing still fit when nearly full.
   const c = capacity(); if (!c) return;
+  const free = (c.limitKB - c.usedKB) * 1024;
   const pending = [planned.meta].concat(planned.records, planned.history).filter(chunk => !reusable(chunk, present));
+  // A stored character takes at most 6 bytes (a \u escape), so the exact size, which scans the
+  // new chunks, is needed only when that bound gets close to the reserve.
+  if (free - pending.reduce((sum, chunk) => sum + chunk.text.length * 6 + 2, 16 * 1024) >= RESERVE) return;
   const needed = pending.reduce((sum, chunk) => sum + utf8Length(JSON.stringify(chunk.text)), 0) + 16 * 1024;
-  if ((c.limitKB - c.usedKB) * 1024 - needed >= RESERVE) return;
+  if (free - needed >= RESERVE) return;
   const error = new Error(`保存失败：本地存储空间即将用满（已用 ${Math.min(100, Math.round(c.ratio * 100))}%），为保证仍能删除和修改已有记录，已暂停新增。删除和修改不受影响，请先导出 JSON 备份并保存到设备之外。`);
   error.reserve = true;
   throw error;
 }
-function load() {
+function load(lazy) {
   const c = session(); const keys = keyList(); const raw = get(KEY, keys);
   if (!missing(raw)) {
     try {
       if (isManifest(raw)) {
         const signature = JSON.stringify(raw); const present = new Set(keys);
-        if (c.ledger && c.ledger.signature === signature && refsOf(raw).every(key => present.has(key))) return { state: JSON.parse(c.ledger.text), raw, manifest: raw };
-        const state = core.migrateState(readManifest(raw, keys));
-        c.ledger = { signature, text: JSON.stringify(state) };
-        return { state, raw, manifest: raw };
+        if (c.ledger && c.ledger.signature === signature && refsOf(raw).every(key => present.has(key))) {
+          // A save needs only the cached text and entry count, so it skips parsing the ledger.
+          const hit = { raw, manifest: raw, text: c.ledger.text, entries: c.ledger.entries };
+          return lazy ? hit : Object.assign(hit, { state: JSON.parse(c.ledger.text) });
+        }
+        const state = core.migrateState(readManifest(raw, keys)); const text = JSON.stringify(state);
+        c.ledger = { signature, text, entries: entries(state) };
+        return { state, raw, manifest: raw, text, entries: c.ledger.entries };
       }
       if (raw.version !== 3) throw new Error('version');
       return { state: core.migrateState(clone(raw)), raw };
@@ -313,30 +365,39 @@ function fileSlot(fs, root, names, name) {
   const cached = files.get(name);
   if (cached && cached.size === size) return cached;
   try {
-    const value = JSON.parse(fs.readFileSync(path, 'utf8'));
-    const info = { sequence: value.sequence, fingerprint: plan(unpack(value)).fingerprint, size };
+    const text = fs.readFileSync(path, 'utf8');
+    // Copies written by this version carry sequence and fingerprint in the header, so rotation
+    // trusts the header of a complete-looking file. Inspection and recovery still verify the
+    // whole file; only older copies without a fingerprint are verified here.
+    const head = text.endsWith('}}') && /^\{"format":1,"sequence":(\d+),"savedAt":"[^"]*","checksum":"[0-9a-f]+","fingerprint":"([0-9a-z]+)","state":\{/.exec(text.slice(0, 400));
+    let info;
+    if (head) info = { sequence: Number(head[1]), fingerprint: head[2], size };
+    else { const value = JSON.parse(text); info = { sequence: value.sequence, fingerprint: plan(unpack(value)).fingerprint, size }; }
     files.set(name, info); return info;
   } catch (e) { files.delete(name); return null; }
 }
-function snapshotFile(state, manifest, stateText) {
+function snapshotFile(state, manifest, stateText, stateSum) {
   const { fs, root, names } = disk();
   const slots = AUTO_FILES.map(name => fileSlot(fs, root, names, name));
   const print = manifest ? manifest.fingerprint : plan(state).fingerprint;
   if (current(slots, print)) return;
   const sequence = latestOf(slots) + 1; const name = AUTO_FILES[olderOf(slots)];
   const path = `${root}/${name}`; const temp = `${path}.tmp`; const json = stateText || JSON.stringify(state);
+  const sum = stateText && stateSum ? stateSum : checksumText(json);
   // Same envelope as format 1 copies (readable by earlier versions), plus the content fingerprint.
-  const text = '{"format":1,"sequence":' + sequence + ',"savedAt":' + JSON.stringify(new Date().toISOString()) + ',"checksum":' + JSON.stringify(checksumText(json)) + ',"fingerprint":' + JSON.stringify(print) + ',"state":' + json + '}';
+  const text = '{"format":1,"sequence":' + sequence + ',"savedAt":' + JSON.stringify(new Date().toISOString()) + ',"checksum":' + JSON.stringify(sum) + ',"fingerprint":' + JSON.stringify(print) + ',"state":' + json + '}';
   fileStep(() => fs.writeFileSync(temp, text, 'utf8'));
   if (fs.readFileSync(temp, 'utf8') !== text) throw new Error('备份文件核验失败');
+  const size = fs.statSync(temp).size;
   // Only replace the older/invalid slot after a verified temporary copy exists.
   // The other slot remains intact even if rename fails or the process exits.
   session().files.delete(name);
   if (names.includes(name)) fileStep(() => fs.unlinkSync(path));
   fileStep(() => fs.renameSync(temp, path));
   if (!names.includes(name)) names.push(name);
-  if (fs.readFileSync(path, 'utf8') !== text) throw new Error('备份文件核验失败');
-  try { session().files.set(name, { sequence, fingerprint: print, size: fs.statSync(path).size }); } catch (e) { /* re-read next time */ }
+  // Renaming does not change content, so a matching size confirms the verified copy is in place.
+  if (fs.statSync(path).size !== size) throw new Error('备份文件核验失败');
+  session().files.set(name, { sequence, fingerprint: print, size });
 }
 function collect() {
   // Delete chunks that no index references. Any unreadable index aborts the whole cleanup.
@@ -358,9 +419,9 @@ function log(operation, result, state) {
     wx.setStorageSync(LOG, entries);
   } catch (e) { rememberWarning(true); }
 }
-function protectState(state, manifest, stateText) {
+function protectState(state, manifest, stateText, stateSum) {
   const failures = [];
-  for (const [name, action] of [['历史快照', () => snapshot(state, manifest)], ['设备文件备份', () => snapshotFile(state, manifest, stateText)], ['使用标记', () => wx.setStorageSync(MARKER, { version: 1 })]]) {
+  for (const [name, action] of [['历史快照', () => snapshot(state, manifest)], ['设备文件备份', () => snapshotFile(state, manifest, stateText, stateSum)], ['使用标记', () => wx.setStorageSync(MARKER, { version: 1 })]]) {
     try { action(); } catch (e) { failures.push(fileFull(e) ? name + '（空间不足）' : name); }
   }
   // Leftover chunks only cost space; a failed cleanup is retried after the next save.
@@ -371,7 +432,7 @@ function protectState(state, manifest, stateText) {
 function protect() {
   const loaded = load();
   if (!loaded.raw || loaded.raw.version !== 3) return [];
-  const warnings = protectState(loaded.state, loaded.manifest);
+  const warnings = protectState(loaded.state, loaded.manifest, loaded.text);
   log('protect', warnings.length ? 'degraded:' + warnings.join(',') : 'ok', loaded.state);
   return warnings;
 }
@@ -398,21 +459,22 @@ function discardUnreferenced(next) {
   discard(next.written);
 }
 function commit(input, touch = true, operation = 'save', recovering = false) {
-  const c = session(); const state = clone(input); core.validateState(state);
+  // A shallow copy is enough: nothing below changes nested data or keeps a reference to it.
+  const c = session(); const state = Object.assign({}, input); core.validateState(state);
   if (touch) state.updatedAt = new Date().toISOString();
-  let previous; let next;
+  let previous; let next; let planned;
   const attempt = () => {
     if (!recovering) {
-      previous = load();
+      previous = load(true);
       if (previous.raw && previous.raw.version === 3) {
         // Abort before changing the primary ledger if the previous valid state cannot be protected.
         snapshot(previous.state, previous.manifest);
-        snapshotFile(previous.state, previous.manifest);
+        snapshotFile(previous.state, previous.manifest, previous.text);
       }
     }
-    const present = new Set(keyList()); const planned = plan(state);
+    const present = new Set(keyList()); planned = plan(state);
     // Only additions are held back; restores and changes that add nothing may use the reserve.
-    if (!recovering && entries(state) > entries(previous.state)) reserveFor(planned, present);
+    if (!recovering && entries(state) > (previous.entries !== undefined ? previous.entries : entries(previous.state))) reserveFor(planned, present);
     // Chunks are written under new keys first; the old index keeps pointing at the old ones.
     const stored = storeChunks(planned, present);
     next = { manifest: manifestOf(planned, stored.refs, state), written: stored.written };
@@ -445,10 +507,11 @@ function commit(input, touch = true, operation = 'save', recovering = false) {
     throw new Error('保存结果无法核实，请重新检查账本和本地副本，勿重复提交。');
   }
   // The main write has committed. A later backup failure is a warning, not a failed save.
-  const text = JSON.stringify(state);
+  // The ledger JSON and its file checksum are rebuilt from chunks, rescanning only changed ones.
+  const { text, checksum: sum } = assemble(planned, state);
   // Pending category upgrades are applied on every read, so only cache states that need none.
-  c.ledger = state.settings.expenseCategoryRevision >= 1 ? { signature: JSON.stringify(next.manifest), text } : null;
-  const warnings = protectState(state, next.manifest, text);
+  c.ledger = state.settings.expenseCategoryRevision >= 1 ? { signature: JSON.stringify(next.manifest), text, entries: entries(state) } : null;
+  const warnings = protectState(state, next.manifest, text, sum);
   log(operation, warnings.length ? 'committed-degraded:' + warnings.join(',') : 'ok', state);
   return state;
 }

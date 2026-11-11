@@ -34,11 +34,16 @@ function validate(s, version) {
     const count = s.categories.filter(c => c.type === type).length;
     if (count < 1 || count > 40) throw new Error('收入和支出各须保留 1—40 个分类');
   });
+  // Many records share a date, so each distinct date string is parsed once.
+  const checkedDates = new Set();
   s.records.forEach(r => {
     if (!r || typeof r.id !== 'string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(r.id) || ids.has(r.id) || !cats.has(r.categoryId) || !Number.isSafeInteger(r.amountCents) || r.amountCents <= 0 || r.amountCents > MAX_CENTS || !PAYMENTS.includes(r.payment) || typeof r.note !== 'string' || r.note.length > 100 || !/^([01]\d|2[0-3]):[0-5]\d$/.test(r.time) || !Number.isSafeInteger(r.createdAt) || r.createdAt < 0 || !Number.isSafeInteger(r.updatedAt) || r.updatedAt < 0 || !Number.isSafeInteger(r.refundCents) || r.refundCents < 0 || r.refundCents > r.amountCents) throw new Error('账单数据无效');
     if (version >= 2 && (!TYPES.includes(r.type) || cats.get(r.categoryId).type !== r.type || (r.type === 'income' && r.refundCents !== 0))) throw new Error('账单类型、分类或退款数据无效');
-    dates.parseDate(r.date);
-    if (r.date < '2000-01-01' || r.date > '2100-12-31') throw new Error('账单日期超出范围');
+    if (!checkedDates.has(r.date)) {
+      dates.parseDate(r.date);
+      if (r.date < '2000-01-01' || r.date > '2100-12-31') throw new Error('账单日期超出范围');
+      checkedDates.add(r.date);
+    }
     ids.add(r.id);
   });
   if (!s.settings || !Number.isSafeInteger(s.settings.budgetCents) || s.settings.budgetCents < 0 || s.settings.budgetCents > MAX_CENTS || typeof s.updatedAt !== 'string' || typeof s.lastBackupAt !== 'string') throw new Error('设置数据无效');
