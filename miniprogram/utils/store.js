@@ -8,8 +8,8 @@ function missing(value) { return value === '' || value === undefined || value ==
 function read() {
   return persistence.load().state;
 }
-function write(s, touch = true, operation = 'save', recovering = false) {
-  return persistence.commit(s, touch, operation, recovering);
+function write(s, touch = true, operation = 'save', recovering = false, keep) {
+  return persistence.commit(s, touch, operation, recovering, keep);
 }
 function saveRecord(input, recordId) {
   const s = read(); const prev = recordId ? s.records.find(r => r.id === recordId) : null;
@@ -57,11 +57,27 @@ function prepareBackup() {
   // that a first export cannot later look like an orphaned recovery file.
   if (!loaded.raw || loaded.raw.version !== 3) write(loaded.state, false, 'prepare-backup');
 }
+const SAFETY_LOST = '恢复没有完成，导入前副本可能已被替换。请到「我的 → 导出与备份」检查本地副本，先导出需要保留的副本再操作。';
+// After a failed restore, put the before-import copy back as it was, but only while the main
+// ledger still holds what it held before: if the main write may have landed, the copy just made
+// of the old ledger must stay. Returns false when the old copy may be lost.
+function putBackSafety(before, mainBefore) {
+  try {
+    if (JSON.stringify(wx.getStorageSync(SAFETY_KEY)) === JSON.stringify(before)) return true;
+    if (JSON.stringify(wx.getStorageSync(KEY)) !== JSON.stringify(mainBefore)) return true;
+    if (missing(before)) wx.removeStorageSync(SAFETY_KEY); else wx.setStorageSync(SAFETY_KEY, before);
+    return JSON.stringify(wx.getStorageSync(SAFETY_KEY)) === JSON.stringify(missing(before) ? '' : before);
+  } catch (e) { return false; }
+}
 function restore(s) {
   const next = core.migrateState(s);
-  let prev = persistence.get(KEY);
+  const current = persistence.get(KEY);
+  let prev = current;
   if (missing(prev)) prev = persistence.get(V2_KEY);
   if (missing(prev)) prev = persistence.get(LEGACY_KEY);
+  // The before-import copy as it is now; it may be the very copy being restored.
+  let safetyBefore;
+  try { safetyBefore = wx.getStorageSync(SAFETY_KEY); } catch (e) { throw new Error('无法读取恢复前副本，已取消恢复'); }
   // Never destroy a useful safety copy by replacing it with a fabricated empty state.
   try {
     if (!missing(prev)) {
@@ -69,8 +85,10 @@ function restore(s) {
       if (JSON.stringify(persistence.get(SAFETY_KEY)) !== JSON.stringify(prev)) throw new Error('副本写入核验失败');
     }
   }
-  catch (e) { throw new Error('无法创建恢复前副本，已取消恢复'); }
-  return write(next, true, 'restore', true);
+  catch (e) { throw new Error(putBackSafety(safetyBefore, current) ? '无法创建恢复前副本，已取消恢复' : SAFETY_LOST); }
+  // A failed restore changes nothing; the old copy's chunks stay while the save frees space.
+  try { return write(next, true, 'restore', true, [safetyBefore]); }
+  catch (e) { if (!putBackSafety(safetyBefore, current)) throw new Error(SAFETY_LOST); throw e; }
 }
 function safetyData() {
   let current = persistence.get(SAFETY_KEY);
