@@ -177,10 +177,11 @@ test('从旧账本直接恢复时也保留原账本，写入失败不改变当�
   db.set(store.LEGACY_KEY, legacy()); store.restore(core.freshState());
   assert.deepEqual(db.get(store.SAFETY_KEY), legacy()); store.restoreSafety();
   assert.equal(store.read().records[0].id, 'old_bill');
-  store.saveRecord(income()); const before = clone(db.get(store.KEY)); const records = store.read().records; failKey = store.KEY;
+  store.saveRecord(income()); const before = clone(db.get(store.KEY)); const records = store.read().records; const safety = clone(db.get(store.SAFETY_KEY)); failKey = store.KEY;
   assert.throws(() => store.restore(core.freshState()), /保存失败/);
   assert.deepEqual(db.get(store.KEY), before);
-  failKey = ''; store.restoreSafety(); assert.deepEqual(store.read().records, records);
+  // A failed restore changes nothing: the ledger and the before-import copy stay as they were.
+  failKey = ''; assert.deepEqual(store.read().records, records); assert.deepEqual(db.get(store.SAFETY_KEY), safety);
 });
 
 test('分类名称在类型内唯一，迁移同类型且每种类型至少保留一个', () => {

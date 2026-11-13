@@ -401,14 +401,17 @@ function snapshotFile(state, manifest, stateText, stateSum) {
   if (fs.statSync(path).size !== size) throw new Error('备份文件核验失败');
   session().files.set(name, { sequence, fingerprint: print, size });
 }
-function collect() {
+function collect(keep = []) {
   // Delete chunks that no index references. Any unreadable index aborts the whole cleanup.
+  // `keep` lists further indexes whose chunks must survive, such as the before-import copy
+  // that a failing restore still has to put back.
   if (typeof wx.removeStorageSync !== 'function') return;
   const keys = keyList(); const chunks = keys.filter(key => key.startsWith(CHUNK_PREFIX));
   if (!chunks.length) return;
   const live = new Set(); const add = m => refsOf(m).forEach(key => live.add(key));
   for (const key of [KEY, SAFETY[0]]) { const value = get(key, keys); if (isManifest(value)) add(value); }
   for (const key of SNAPSHOTS) { const value = get(key, keys); if (value && value.format === 2) add(value.manifest); }
+  for (const value of keep) if (isManifest(value)) add(value);
   for (const key of chunks) if (!live.has(key)) { wx.removeStorageSync(key); forget(key); }
 }
 function log(operation, result, state) {
@@ -453,7 +456,7 @@ function reason(e) {
   if (/exceed|quota|full|空间不足/i.test(message)) return '本地空间不足（' + message + '）';
   return message || '本地空间不足或存储不可用';
 }
-function reclaim() {
+function reclaim(keep) {
   // Release the older of two valid storage snapshots and the chunks only it uses. The device
   // files keep their own two full copies, and the next save rotates a snapshot into the slot.
   if (typeof wx.removeStorageSync !== 'function') return false;
@@ -461,7 +464,7 @@ function reclaim() {
   const slots = SNAPSHOTS.map(key => storageSlot(get(key, keys), present));
   if (!slots[0] || !slots[1]) return false;
   wx.removeStorageSync(SNAPSHOTS[olderOf(slots)]);
-  collect();
+  collect(keep);
   return true;
 }
 function discardUnreferenced(next) {
@@ -470,7 +473,7 @@ function discardUnreferenced(next) {
   catch (e) { return; }
   discard(next.written);
 }
-function commit(input, touch = true, operation = 'save', recovering = false) {
+function commit(input, touch = true, operation = 'save', recovering = false, keep = []) {
   // A shallow copy is enough: nothing below changes nested data or keeps a reference to it.
   const c = session(); const state = Object.assign({}, input); core.validateState(state);
   if (touch) state.updatedAt = new Date().toISOString();
@@ -499,7 +502,7 @@ function commit(input, touch = true, operation = 'save', recovering = false) {
       // When space runs out, free the older storage snapshot once and retry. Device files keep
       // their own two copies. Any other failure is reported unchanged.
       let freed = false;
-      try { freed = (quota(e) || e.reserve === true) && reclaim(); } catch (r) { freed = false; }
+      try { freed = (quota(e) || e.reserve === true) && reclaim(keep); } catch (r) { freed = false; }
       if (!freed) throw e;
       attempt();
     }
