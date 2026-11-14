@@ -114,7 +114,9 @@ function restoreCandidate(id, token, options) {
   if (item.token !== token) throw new Error('副本已变化，请重新检查并确认');
   return restore(item.state, options);
 }
-function markBackup() { const s = read(); s.lastBackupAt = new Date().toISOString(); write(s); }
+// Recording a sent backup is not an edit: the ledger time stays, so the same file sent again
+// is still recognised as the current backup.
+function markBackup() { const s = read(); s.lastBackupAt = new Date().toISOString(); write(s, false, 'mark-backup'); }
 // A home-page nudge after 30 days without a sent backup. The snooze is a UI preference kept
 // outside the ledger and written only when the user taps "later".
 const REMINDER_KEY = 'daily-expense:reminder:v1';
