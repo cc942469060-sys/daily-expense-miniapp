@@ -62,7 +62,10 @@ function get(key, keys = keyList()) {
   let value;
   try { value = wx.getStorageSync(key); }
   catch (e) { throw new Error('无法读取本地账本，请稍后重试'); }
-  if (missing(value) && keys.includes(key)) throw new Error(MISSING);
+  if (missing(value) && keys.includes(key)) {
+    // Listed but empty, unlike a read error: a restore may offer to replace such a key.
+    const error = new Error(MISSING); error.unreadable = true; throw error;
+  }
   return value;
 }
 function disk() {
