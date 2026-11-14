@@ -103,8 +103,13 @@ function safetyData() {
   return missing(current) ? persistence.get(LEGACY_SAFETY_KEY) : current;
 }
 function hasSafety() { return !missing(safetyData()); }
+// The before-import copy itself reads back empty. Report it plainly: the unreadable flag would make
+// the backup page offer to replace the main ledger, which is not the key that failed.
+const SAFETY_UNREADABLE = '导入前副本还在存储里，但读出来是空的，无法用它恢复。当前账本没有改动，可以改用其他本地副本恢复。';
 function restoreSafety(options) {
-  const s = safetyData(); if (missing(s)) throw new Error('没有恢复前副本');
+  let s;
+  try { s = safetyData(); } catch (e) { if (e.unreadable === true) throw new Error(SAFETY_UNREADABLE); throw e; }
+  if (missing(s)) throw new Error('没有恢复前副本');
   // The copy is either a legacy single-object ledger or an index of shared chunks.
   return restore(persistence.resolve(s), options);
 }

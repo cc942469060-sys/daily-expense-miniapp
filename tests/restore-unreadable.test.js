@@ -84,3 +84,14 @@ test('备份页「恢复导入前副本」遇到读不出的主账本，也先�
   p.undoRestore(); await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(modals, ['恢复到导入前？', '主账本无法读取']); assert.equal(notes(store.read()), 'A1');
 });
+
+test('导入前副本本身读不出时，「恢复导入前副本」直接说明，不再询问是否替换主账本', async () => {
+  store.saveRecord(bill('10', 'A1'));
+  const b = core.freshState(); b.records.push(core.createRecord(b, bill('99', 'B1'))); store.restore(b);
+  // The page was opened while the copy still read fine, so the button is still shown.
+  const p = backupPage(); assert.equal(p.data.hasSafety, true);
+  emptyKey = store.SAFETY_KEY; answers = [true, true]; modals = []; writes = [];
+  p.undoRestore(); await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(modals, ['恢复到导入前？', '操作未完成']); assert.deepEqual(writes, []); assert.equal(notes(store.read()), 'B1');
+  assert.throws(() => store.restoreSafety({ replaceUnreadable: true }), e => e.unreadable !== true && /导入前副本还在存储里，但读出来是空的/.test(e.message));
+});
