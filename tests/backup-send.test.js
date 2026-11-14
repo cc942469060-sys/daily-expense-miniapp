@@ -73,3 +73,13 @@ test('文件发送成功但备份时间写入失败仍报告发送成功', async
   wx.setStorageSync=(k,v)=>{ if(k===store.KEY)throw new Error('full'); write(k,v); };
   await send(p); assert.match(p.data.sendStatus,/文件已发送，但备份时间未能更新/); assert.equal(p.data.busy,false);
 });
+test('同一份备份连续发送两次都算成功备份，不误报账本已有更新，也不改变账本时间', async () => {
+  store.saveRecord({ type: 'expense', categoryId: 'food', amount: '12', refund: '0', date: '2024-02-10', time: '12:00', payment: '微信', note: '午饭' });
+  const p = page(); await p.exportFile('json'); const updatedAt = store.read().updatedAt;
+  await send(p); const first = store.read().lastBackupAt;
+  assert.match(p.data.sendStatus, /文件已发送/); assert.equal(store.read().updatedAt, updatedAt);
+  // Let the clock move on so a second backup time can be told apart from the first.
+  await new Promise(resolve => setTimeout(resolve, 5));
+  await send(p);
+  assert.match(p.data.sendStatus, /文件已发送/); assert.notEqual(store.read().lastBackupAt, first); assert.equal(store.read().updatedAt, updatedAt);
+});
