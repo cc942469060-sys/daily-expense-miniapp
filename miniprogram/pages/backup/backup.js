@@ -10,6 +10,18 @@ function nameTime(id) { const match = id.match(/^file:xiaorizhang-backup-(\d+)-/
 function sizeText(bytes) { return !Number.isFinite(bytes) ? '大小未知' : bytes >= 1048576 ? (bytes / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(bytes / 1024)) + ' KB'; }
 function display(item) { return Object.assign({}, item, { savedText: timeText(item.savedAt || nameTime(item.id)), updatedText: timeText(item.updatedAt), sizeText: sizeText(item.size) }); }
 function totalSize(items) { return items.reduce((sum, item) => sum + (Number.isFinite(item.size) ? item.size : 0), 0); }
+// A restore stops when a ledger key is listed but reads back empty, because no copy of it can be
+// kept first. Ask once more and retry with consent. The restore runs right away, so the usual
+// case stays synchronous; resolves to false when the user declines.
+const UNREADABLE_RESTORE = '主账本还在存储里，但读出来是空的，恢复前没法先为它保存副本。继续会用所选副本替换它；如果它只是暂时读不出来，原来的内容会被覆盖。建议先导出需要保留的副本并发送到聊天。';
+function restoreConfirming(run) {
+  try { run(); return Promise.resolve(true); }
+  catch (e) {
+    if (e.unreadable !== true) return Promise.reject(e);
+    return new Promise(resolve => wx.showModal({ title: '主账本无法读取', content: UNREADABLE_RESTORE, confirmText: '仍然恢复', confirmColor: '#B04E49', success: r => resolve(r.confirm), fail: () => resolve(false) }))
+      .then(confirmed => { if (confirmed) run({ replaceUnreadable: true }); return confirmed; });
+  }
+}
 Page({
   data: { count: 0, accountCount: 0, backupTime: '尚未成功发送备份', busy: false, storageError: '', fileName: '', pendingId: '', sendFileType: '', sendStatus: '', sendError: '', latestExport: null, historyExports: [], recoveryCopies: [], historyOpen: false, recoveryOpen: false, moreOpen: false, hasSafety: false, inspected: false, candidates: [], protectionWarning: '', storageUsage: '', capacityWarning: '', exportSizeText: '' },
   onShow() { this.refresh(); },
@@ -94,7 +106,7 @@ Page({
     try {
       const item = store.recoveryCandidate(e.currentTarget.dataset.id);
       const confirmed = await new Promise(resolve => wx.showModal({ title: '恢复此本地副本？', content: `${item.label}，账本时间 ${timeText(item.updatedAt)}。包含 ${item.records} 笔账单、${item.accounts} 个资产与负债账户。将替换当前账本，请先导出需要保留的副本。`, confirmText: '恢复', success: r => resolve(r.confirm), fail: () => resolve(false) }));
-      if (confirmed) { store.restoreCandidate(item.id, item.token); this.refresh(); ui.toast('副本已恢复'); }
+      if (confirmed && await restoreConfirming(options => store.restoreCandidate(item.id, item.token, options))) { this.refresh(); ui.toast('副本已恢复'); }
     } catch (e) { ui.error(e); } finally { this.setData({ busy: false }); }
   },
   exportCsv() { this.exportFile('csv'); },
@@ -147,10 +159,13 @@ Page({
       const assetCount = state.accounts.filter(a => a.kind === 'asset').length; const debtCount = state.accounts.length - assetCount;
       const emptyWarning = state.accounts.length ? '' : '此备份没有资产账户，恢复后现有资产和负债也会被清空。';
       const confirmed = await new Promise(resolve => wx.showModal({ title: '恢复全部数据？', content: `备份包含 ${state.records.length} 笔账单、${assetCount} 个资产账户、${debtCount} 个负债账户（含归档）。将替换全部账单、账户、金额历史、分类和设置，并保留恢复前副本。${emptyWarning}`, confirmText: '恢复', success: r => resolve(r.confirm), fail: () => resolve(false) }));
-      if (confirmed) { store.restore(state); this.refresh(); ui.toast('账本已恢复'); }
+      if (confirmed && await restoreConfirming(options => store.restore(state, options))) { this.refresh(); ui.toast('账本已恢复'); }
     } catch (e) { ui.error(e); } finally { this.setData({ busy: false }); }
   },
   undoRestore() {
-    wx.showModal({ title: '恢复到导入前？', content: '将替换全部账单、资产账户、金额历史、分类和设置。导入之后新增或修改的数据不会保留。', confirmText: '恢复副本', success: r => { if (r.confirm) ui.run(() => { store.restoreSafety(); this.refresh(); ui.toast('副本已恢复'); }); } });
+    wx.showModal({ title: '恢复到导入前？', content: '将替换全部账单、资产账户、金额历史、分类和设置。导入之后新增或修改的数据不会保留。', confirmText: '恢复副本', success: r => {
+      // Restores right away; only a ledger that reads back empty waits for one more confirmation.
+      if (r.confirm) restoreConfirming(options => store.restoreSafety(options)).then(done => { if (done) { this.refresh(); ui.toast('副本已恢复'); } }, e => ui.error(e));
+    } });
   }
 });

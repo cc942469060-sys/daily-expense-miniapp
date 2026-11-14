@@ -69,12 +69,19 @@ function putBackSafety(before, mainBefore) {
     return JSON.stringify(wx.getStorageSync(SAFETY_KEY)) === JSON.stringify(missing(before) ? '' : before);
   } catch (e) { return false; }
 }
-function restore(s) {
+function restore(s, options = {}) {
   const next = core.migrateState(s);
-  const current = persistence.get(KEY);
-  let prev = current;
-  if (missing(prev)) prev = persistence.get(V2_KEY);
-  if (missing(prev)) prev = persistence.get(LEGACY_KEY);
+  let current = ''; let prev = '';
+  try {
+    current = persistence.get(KEY); prev = current;
+    if (missing(prev)) prev = persistence.get(V2_KEY);
+    if (missing(prev)) prev = persistence.get(LEGACY_KEY);
+  } catch (e) {
+    // A ledger key is listed but reads back empty, so no copy of it can be kept first. Replace
+    // it only after the user agreed (pages/backup asks); no older ledger is copied instead.
+    if (e.unreadable !== true || options.replaceUnreadable !== true) throw e;
+    prev = '';
+  }
   // The before-import copy as it is now; it may be the very copy being restored.
   let safetyBefore;
   try { safetyBefore = wx.getStorageSync(SAFETY_KEY); } catch (e) { throw new Error('无法读取恢复前副本，已取消恢复'); }
@@ -96,16 +103,16 @@ function safetyData() {
   return missing(current) ? persistence.get(LEGACY_SAFETY_KEY) : current;
 }
 function hasSafety() { return !missing(safetyData()); }
-function restoreSafety() {
+function restoreSafety(options) {
   const s = safetyData(); if (missing(s)) throw new Error('没有恢复前副本');
   // The copy is either a legacy single-object ledger or an index of shared chunks.
-  return restore(persistence.resolve(s));
+  return restore(persistence.resolve(s), options);
 }
 function recoveryCandidate(id) { const item = persistence.candidate(id); return Object.assign({}, item, { token: persistence.checksum(item.state) }); }
-function restoreCandidate(id, token) {
+function restoreCandidate(id, token, options) {
   const item = recoveryCandidate(id);
   if (item.token !== token) throw new Error('副本已变化，请重新检查并确认');
-  return restore(item.state);
+  return restore(item.state, options);
 }
 function markBackup() { const s = read(); s.lastBackupAt = new Date().toISOString(); write(s); }
 // A home-page nudge after 30 days without a sent backup. The snooze is a UI preference kept
