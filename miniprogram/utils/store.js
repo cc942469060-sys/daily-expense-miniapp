@@ -63,7 +63,9 @@ function fixedInfo(s, input, itemId) {
   return { name, categoryId: input.categoryId, amountCents, variable, day, payment: input.payment, note, endMonth };
 }
 // Templates for monthly bills. Saving or deleting one never changes bills already recorded.
-function saveFixed(input, itemId) {
+// linkIds: bills a suggestion was built from. They are marked as made from the new template, so
+// this month's bill is not recorded twice and statistics count them as fixed expenses.
+function saveFixed(input, itemId, linkIds = []) {
   const s = read(); const items = fixed.list(s).slice(); const info = fixedInfo(s, input, itemId); const now = Date.now();
   if (itemId) {
     const index = items.findIndex(f => f.id === itemId);
@@ -73,7 +75,9 @@ function saveFixed(input, itemId) {
     if (items.length >= fixed.MAX_FIXED) throw new Error(`最多设置 ${fixed.MAX_FIXED} 项固定支出`);
     items.push(Object.assign({ id: core.id('fixed') }, info, { createdAt: now, updatedAt: now }));
   }
-  s.fixedExpenses = items; write(s); return items.find(f => f.id === (itemId || items[items.length - 1].id));
+  const saved = items.find(f => f.id === (itemId || items[items.length - 1].id));
+  if (!itemId) s.records.forEach(r => { if (linkIds.includes(r.id) && r.type === 'expense' && !r.fixedId) r.fixedId = saved.id; });
+  s.fixedExpenses = items; write(s); return saved;
 }
 function removeFixed(itemId) {
   const s = read();
@@ -90,6 +94,14 @@ function recordFixed(itemId, again = false) {
   const record = core.createRecord(s, { type: 'expense', amount: core.money(item.amountCents), categoryId: item.categoryId, date: fixed.recordDate(item, today), time: dates.timeKey(now), payment: item.payment, note: item.note ? item.name + ' · ' + item.note : item.name, fixedId: item.id });
   s.records.push(record); write(s); return { record };
 }
+// Suggestions the user waved away. A display preference kept outside the ledger, like the
+// backup reminder snooze; losing it only brings a suggestion back.
+const FIXED_DISMISSED_KEY = 'daily-expense:fixed-dismissed:v1';
+function dismissedSuggestions() {
+  try { const v = wx.getStorageSync(FIXED_DISMISSED_KEY); return Array.isArray(v) ? v.filter(k => typeof k === 'string') : []; } catch (e) { return []; }
+}
+function fixedSuggestions(s, today) { return fixed.suggestions(s, today, dismissedSuggestions()); }
+function dismissSuggestion(key) { wx.setStorageSync(FIXED_DISMISSED_KEY, dismissedSuggestions().filter(k => k !== key).concat(key).slice(-100)); }
 function setBudget(v) { const s = read(); s.settings.budgetCents = core.amountToCents(v, true); write(s); }
 function parseBackup(text) {
   let data; try { data = JSON.parse(text); } catch (e) { throw new Error('文件不是有效的 JSON 备份'); }
@@ -244,4 +256,4 @@ function removeAssetCategory(categoryId, targetId) {
   s.accounts.forEach(a => { if (a.categoryId === categoryId) a.categoryId = targetId; });
   s.assetCategories = s.assetCategories.filter(c => c.id !== categoryId); write(s);
 }
-module.exports = { saveFixed, removeFixed, recordFixed, KEY, SAFETY_KEY, REMINDER_KEY, backupReminder, snoozeBackupReminder, V2_KEY, V2_SAFETY_KEY, LEGACY_KEY, LEGACY_SAFETY_KEY, read, write, saveRecord, removeRecord, saveCategory, removeCategory, setBudget, parseBackup, backupText, prepareBackup, restore, hasSafety, restoreSafety, markBackup, saveAccount, updateAccountValue, archiveAccount, removeAccount, setAssetAmountsHidden, saveAssetCategory, removeAssetCategory, protect: persistence.protect, warm: persistence.warm, recordError: persistence.recordError, diagnostics: persistence.diagnostics, protectionWarning: persistence.protectionWarning, capacity: persistence.capacity, capacityText: persistence.capacityText, capacityWarning: persistence.capacityWarning, removeExports: persistence.removeExports, recoveryCandidate, restoreCandidate };
+module.exports = { saveFixed, removeFixed, recordFixed, fixedSuggestions, dismissSuggestion, FIXED_DISMISSED_KEY, KEY, SAFETY_KEY, REMINDER_KEY, backupReminder, snoozeBackupReminder, V2_KEY, V2_SAFETY_KEY, LEGACY_KEY, LEGACY_SAFETY_KEY, read, write, saveRecord, removeRecord, saveCategory, removeCategory, setBudget, parseBackup, backupText, prepareBackup, restore, hasSafety, restoreSafety, markBackup, saveAccount, updateAccountValue, archiveAccount, removeAccount, setAssetAmountsHidden, saveAssetCategory, removeAssetCategory, protect: persistence.protect, warm: persistence.warm, recordError: persistence.recordError, diagnostics: persistence.diagnostics, protectionWarning: persistence.protectionWarning, capacity: persistence.capacity, capacityText: persistence.capacityText, capacityWarning: persistence.capacityWarning, removeExports: persistence.removeExports, recoveryCandidate, restoreCandidate };

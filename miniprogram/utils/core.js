@@ -110,7 +110,7 @@ function total(records, type = 'expense') {
 function filterRecords(state, filter) {
   const f = filter || {}; const query = String(f.query || '').trim().toLowerCase();
   const cats = {}; state.categories.forEach(c => { cats[c.id] = c; });
-  return state.records.filter(r => (!f.type || r.type === f.type) && (!f.start || r.date >= f.start) && (!f.end || r.date <= f.end) && (!f.categoryId || r.categoryId === f.categoryId) && (!f.payment || r.payment === f.payment) && (!query || (r.note + ' ' + cats[r.categoryId].name).toLowerCase().includes(query)))
+  return state.records.filter(r => (!f.type || r.type === f.type) && (!f.start || r.date >= f.start) && (!f.end || r.date <= f.end) && (!f.categoryId || r.categoryId === f.categoryId) && (!f.payment || r.payment === f.payment) && (!f.fixed || (f.fixed === 'fixed' ? !!r.fixedId : !r.fixedId)) && (!query || (r.note + ' ' + cats[r.categoryId].name).toLowerCase().includes(query)))
     .sort((a, b) => {
       const amountOrder = f.sort === 'amount_desc' ? net(b) - net(a) : f.sort === 'amount_asc' ? net(a) - net(b) : 0;
       // Plain string comparison: dates and times have fixed formats, so this gives the same
@@ -188,7 +188,7 @@ function statistics(state, mode, anchor, today, type = 'expense', customRange) {
   bars.forEach(b => { b.height = b.cents ? Math.max(3, Math.round(b.cents / peak * 100)) : 0; b.amountText = moneyText(b.cents); });
   const top = records.slice().sort((a, b) => net(b) - net(a)).slice(0, 3).map(r => decorate(state, r));
   const label = mode === 'all' || mode === 'custom' ? bounds.start.replace(/-/g, '/') + ' — ' + bounds.end.replace(/-/g, '/') : dates.periodLabel(mode, anchor);
-  return { type, summary, start: bounds.start, end: bounds.end, label, granularity, granularityLabel: { day: '按日汇总', month: '按月汇总', year: '按年汇总' }[granularity], totalText: moneyText(sum), grossText: moneyText(gross), refundText: moneyText(refunded), refundCents: refunded, count: records.length, averageText: moneyText(Math.round(sum / days)), maxText: top.length ? top[0].amountText : '0.00', days, categories, bars, peakText: moneyText(!sum ? 0 : peak), top };
+  return { type, summary, start: bounds.start, end: bounds.end, label, granularity, granularityLabel: { day: '按日汇总', month: '按月汇总', year: '按年汇总' }[granularity], totalText: moneyText(sum), grossText: moneyText(gross), refundText: moneyText(refunded), refundCents: refunded, count: records.length, averageText: moneyText(Math.round(sum / days)), maxText: top.length ? top[0].amountText : '0.00', days, categories, bars, peakText: moneyText(!sum ? 0 : peak), top, fixedSplit: type === 'expense' ? fixed.split(records) : null };
 }
 function createRecord(state, input, previous) {
   const now = Date.now(); const type = input.type;

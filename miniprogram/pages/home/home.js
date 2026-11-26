@@ -1,7 +1,7 @@
 const store = require('../../utils/store'); const core = require('../../utils/core'); const dates = require('../../utils/date'); const ui = require('../../utils/ui'); const fixed = require('../../utils/fixed');
 const { viewGroups, appendGroups } = require('../../utils/list');
 Page({
-  data: { today: '', todayText: '0.00', monthText: '0.00', todaySummary: {}, monthSummary: {}, count: 0, groups: [], recentStart: '', recentCount: 0, recentShown: 0, recentLimit: 100, recentHasMore: false, budget: 0, budgetPercent: 0, remainingText: '', overspent: false, storageError: '', capacityWarning: '', fixedPlan: null },
+  data: { today: '', todayText: '0.00', monthText: '0.00', todaySummary: {}, monthSummary: {}, count: 0, groups: [], recentStart: '', recentCount: 0, recentShown: 0, recentLimit: 100, recentHasMore: false, budget: 0, budgetPercent: 0, remainingText: '', overspent: false, storageError: '', capacityWarning: '', fixedPlan: null, fixedSuggestions: 0 },
   onShow() {
     this.refresh();
   },
@@ -14,7 +14,7 @@ Page({
       const used = monthSummary.expenseCents; const budget = s.settings.budgetCents;
       const recentStart = dates.shiftDays(today, -29); const recent = core.filterRecords(s, { start: recentStart, end: today });
       this.ledger = s; this.recent = recent;
-      this.setData({ today, todayText: todaySummary.expenseText, monthText: monthSummary.expenseText, todaySummary, monthSummary, count: day.length, recentStart, recentCount: recent.length, recentShown: Math.min(this.data.recentLimit, recent.length), recentHasMore: recent.length > this.data.recentLimit, groups: viewGroups(core.groups(s, recent.slice(0, this.data.recentLimit), recent)), budget, budgetPercent: budget ? Math.min(100, Math.round(used / budget * 100)) : 0, remainingText: core.moneyText(Math.abs(budget - used)), overspent: used > budget, storageError: '', backupReminder: store.backupReminder(s), fixedPlan: fixed.plan(s, today) });
+      this.setData({ today, todayText: todaySummary.expenseText, monthText: monthSummary.expenseText, todaySummary, monthSummary, count: day.length, recentStart, recentCount: recent.length, recentShown: Math.min(this.data.recentLimit, recent.length), recentHasMore: recent.length > this.data.recentLimit, groups: viewGroups(core.groups(s, recent.slice(0, this.data.recentLimit), recent)), budget, budgetPercent: budget ? Math.min(100, Math.round(used / budget * 100)) : 0, remainingText: core.moneyText(Math.abs(budget - used)), overspent: used > budget, storageError: '', backupReminder: store.backupReminder(s), fixedPlan: fixed.plan(s, today), fixedSuggestions: store.fixedSuggestions(s, today).length });
     } catch (e) { this.ledger = null; this.recent = null; this.setData({ storageError: e.message, groups: [], recentCount: 0, recentShown: 0, recentHasMore: false, backupReminder: '', fixedPlan: null }); }
   },
   // One tap records a fixed-amount bill; an amount that changes each month opens the record page

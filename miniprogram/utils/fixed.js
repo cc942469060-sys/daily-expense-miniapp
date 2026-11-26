@@ -58,4 +58,51 @@ function describe(s, item, today) {
   const ended = item.endMonth !== '' && item.endMonth < monthOf(today);
   return Object.assign({}, item, { icon: c.icon, categoryName: c.name, amountText: item.amountCents ? moneyText(item.amountCents) : '', ended, endText: item.endMonth ? item.endMonth.replace('-', '年') + '月' : '' });
 }
-module.exports = { MAX_FIXED, list, validateList, dueDate, recordDate, activeIn, billsOf, lastAmountCents, plan, describe };
+// Suggestions from history: expenses with the same category and note that appear exactly once a
+// month in at least 3 of the last 6 months, on about the same day, with amounts that stay close.
+// Bills already made from a template, and pairs a template already covers, are left out.
+const LOOKBACK_MONTHS = 6; const MIN_MONTHS = 3; const DAY_SPREAD = 3;
+function shiftMonth(month, n) { const d = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1 + n, 1, 12); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; }
+function noteKey(note) { return String(note || '').trim().toLowerCase(); }
+function signature(categoryId, note) { return categoryId + '|' + noteKey(note); }
+function suggestions(s, today, dismissed = []) {
+  const month = monthOf(today); const since = shiftMonth(month, -LOOKBACK_MONTHS) + '-01';
+  const cats = {}; s.categories.forEach(c => { cats[c.id] = c; });
+  const covered = list(s).map(f => ({ categoryId: f.categoryId, name: noteKey(f.name) }));
+  const groupsByKey = new Map();
+  for (const r of s.records) {
+    if (r.type !== 'expense' || r.fixedId || r.date < since || r.date > today) continue;
+    const key = signature(r.categoryId, r.note);
+    if (!groupsByKey.has(key)) groupsByKey.set(key, []);
+    groupsByKey.get(key).push(r);
+  }
+  const result = [];
+  for (const [key, records] of groupsByKey) {
+    if (dismissed.includes(key)) continue;
+    const byMonth = new Map(); records.forEach(r => { const m = monthOf(r.date); byMonth.set(m, (byMonth.get(m) || 0) + 1); });
+    // Once a month only; the current month may not have come round yet.
+    if ([...byMonth.values()].some(n => n > 1)) continue;
+    if ([...byMonth.keys()].filter(m => m < month).length < MIN_MONTHS) continue;
+    const sorted = records.slice().sort((a, b) => (a.date < b.date ? -1 : 1));
+    const days = sorted.map(r => Number(r.date.slice(8))).sort((a, b) => a - b); const day = days[Math.floor(days.length / 2)];
+    if (days.some(d => Math.abs(d - day) > DAY_SPREAD)) continue;
+    const amounts = sorted.map(r => r.amountCents); const min = Math.min(...amounts); const max = Math.max(...amounts);
+    if (max > min * 2.5) continue;
+    const r0 = sorted[sorted.length - 1]; const c = cats[r0.categoryId];
+    const name = (r0.note.trim() || c.name).slice(0, 12);
+    if (covered.some(f => f.categoryId === r0.categoryId && (f.name === noteKey(name) || noteKey(r0.note).startsWith(f.name)))) continue;
+    if (list(s).some(f => noteKey(f.name) === noteKey(name))) continue;
+    const variable = max !== min;
+    result.push({ key, name, icon: c.icon, categoryId: r0.categoryId, categoryName: c.name, note: '', payment: r0.payment, day, variable, amountCents: r0.amountCents, amountText: moneyText(r0.amountCents), rangeText: variable ? moneyText(min) + '—' + moneyText(max) : '', months: byMonth.size, recordIds: sorted.map(r => r.id) });
+  }
+  return result.sort((a, b) => b.months - a.months || a.day - b.day).slice(0, 5);
+}
+// Fixed against everything else in a set of expense records, by net amount.
+function split(records) {
+  let fixedCents = 0; let dailyCents = 0; let fixedCount = 0;
+  records.forEach(r => { if (r.type !== 'expense') return; const cents = r.amountCents - r.refundCents; if (r.fixedId) { fixedCents += cents; fixedCount++; } else dailyCents += cents; });
+  const totalCents = fixedCents + dailyCents;
+  const percent = totalCents ? Math.round(fixedCents / totalCents * 1000) / 10 : 0;
+  return { fixedCents, dailyCents, fixedCount, fixedText: moneyText(fixedCents), dailyText: moneyText(dailyCents), fixedPercent: percent.toFixed(1), dailyPercent: totalCents ? (100 - percent).toFixed(1) : '0.0', fixedWidth: Math.round(percent) };
+}
+module.exports = { signature, suggestions, split, MAX_FIXED, list, validateList, dueDate, recordDate, activeIn, billsOf, lastAmountCents, plan, describe };

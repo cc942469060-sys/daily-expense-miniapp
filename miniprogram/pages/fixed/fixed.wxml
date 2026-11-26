@@ -2,6 +2,14 @@
   <view class="title">每月固定支出</view><view class="subtitle">房贷、话费、电费……设好一次，每月一键记账</view>
   <view wx:if="{{storageError}}" class="error">{{storageError}}</view>
   <block wx:else>
+    <view wx:if="{{suggestions.length}}" class="panel suggest-panel">
+      <view class="section-title">根据最近账单，这些可能是固定支出</view>
+      <view class="note">最近 6 个月里至少 3 个月各出现一次、日期和金额相近的支出。添加前可在下方修改。</view>
+      <view wx:for="{{suggestions}}" wx:key="key" class="row menu-item">
+        <view class="item-info"><view>{{item.icon}} {{item.name}}</view><view class="subtitle">每月约 {{item.day}} 日 · {{item.variable ? '¥' + item.rangeText : '¥' + item.amountText}} · {{item.months}} 个月 · {{item.categoryName}}</view></view>
+        <view class="row suggest-actions"><text class="link muted-link" data-key="{{item.key}}" bindtap="dismiss">忽略</text><button class="secondary small-button" data-key="{{item.key}}" bindtap="adopt">设为固定</button></view>
+      </view>
+    </view>
     <view class="panel">
       <view class="row"><text class="section-title">{{editingId ? '编辑固定支出' : '新增固定支出'}}</text><text wx:if="{{editingId}}" class="link" bindtap="cancel">取消编辑</text></view>
       <view class="field"><view class="field-label">名称</view><input class="input" value="{{name}}" maxlength="12" placeholder="例如：房贷、话费、电费" data-field="name" bindinput="input" /></view>
@@ -13,6 +21,7 @@
       <view class="field row"><text>结束月份 · 可选</text><view class="row"><text wx:if="{{endMonth}}" class="link clear-end" bindtap="clearEnd">清除</text><picker mode="date" fields="month" value="{{endMonth || thisMonth}}" start="2000-01" end="2100-12" bindchange="endChange"><view class="link">{{endMonth || '一直有效'}} ›</view></picker></view></view>
       <view class="field"><view class="field-label">备注 · 可选</view><input class="input" value="{{note}}" maxlength="80" placeholder="例如：工商银行代扣" data-field="note" bindinput="input" /></view>
       <view class="note">29—31 日在小月按当月最后一天计算。到扣款日或之后点击，账单记在扣款日；提前点击则记在当天。房贷、分期可填结束月份，之后不再出现在首页。</view>
+      <view wx:if="{{adoptingKey}}" class="note">保存后，推荐所依据的历史账单会标记为这项固定支出，本月已记的不会重复出现在待记清单里。</view>
       <button class="primary save-button" bindtap="save">{{editingId ? '保存修改' : '添加'}}</button>
     </view>
     <view class="panel">

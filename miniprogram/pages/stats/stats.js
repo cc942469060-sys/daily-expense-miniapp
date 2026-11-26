@@ -45,6 +45,7 @@ Page({
   },
   current() { if (this.data.mode === 'all' || this.data.mode === 'custom') return; this.setData({ anchor: this.data.today }); this.refresh(); },
   allBills() { ui.bills({ type: this.data.type, start: this.data.stats.start, end: this.data.stats.end }); },
+  fixedBills(e) { ui.bills({ type: 'expense', start: this.data.stats.start, end: this.data.stats.end, fixed: e.currentTarget.dataset.fixed }); },
   categoryBills(e) { ui.bills({ type: this.data.type, start: this.data.stats.start, end: this.data.stats.end, categoryId: e.currentTarget.dataset.id }); },
   barTap(e) {
     // The first tap shows the bar's range and amount; tapping the same bar again opens its bills.
