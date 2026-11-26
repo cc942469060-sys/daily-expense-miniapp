@@ -3,9 +3,9 @@ const SORTS = ['date_desc', 'amount_desc', 'amount_asc'];
 const PAGE_SIZE = 100;
 const { pick, viewGroups, appendGroups } = require('../../utils/list');
 Page({
-  data: { type: '', start: '', end: '', query: '', categoryId: '', categories: [], categoryNames: [], categoryIndex: 0, payments: ['全部收支方式'].concat(core.PAYMENTS), paymentIndex: 0, sortNames: ['时间：从近到远', '金额：从大到小', '金额：从小到大'], sortIndex: 0, groups: [], summary: {}, count: 0, totalText: '0.00', limit: 100, hasMore: false, shown: 0, today: '', storageError: '' },
+  data: { fixed: '', type: '', start: '', end: '', query: '', categoryId: '', categories: [], categoryNames: [], categoryIndex: 0, payments: ['全部收支方式'].concat(core.PAYMENTS), paymentIndex: 0, sortNames: ['时间：从近到远', '金额：从大到小', '金额：从小到大'], sortIndex: 0, groups: [], summary: {}, count: 0, totalText: '0.00', limit: 100, hasMore: false, shown: 0, today: '', storageError: '' },
   onLoad(options) {
-    this.setData({ type: options.type || '', start: options.start || '', end: options.end || '', categoryId: options.categoryId || '', today: dates.dateKey(new Date()) });
+    this.setData({ type: options.type || '', start: options.start || '', end: options.end || '', categoryId: options.categoryId || '', fixed: ['fixed', 'daily'].includes(options.fixed) ? options.fixed : '', today: dates.dateKey(new Date()) });
   },
   onShow() { this.refresh(); },
   onUnload() { clearTimeout(this.searchTimer); },
@@ -17,7 +17,7 @@ Page({
       if (d.start && d.end && d.start > d.end) throw new Error('开始日期不能晚于结束日期');
       const categories = s.categories.filter(c => !d.type || c.type === d.type);
       const categoryId = categories.some(c => c.id === d.categoryId) ? d.categoryId : '';
-      const records = core.filterRecords(s, { type: d.type, start: d.start, end: d.end, query: d.query, categoryId, payment: d.paymentIndex ? core.PAYMENTS[d.paymentIndex - 1] : '', sort: SORTS[d.sortIndex] });
+      const records = core.filterRecords(s, { type: d.type, start: d.start, end: d.end, query: d.query, categoryId, payment: d.paymentIndex ? core.PAYMENTS[d.paymentIndex - 1] : '', sort: SORTS[d.sortIndex], fixed: d.type === 'income' ? '' : d.fixed });
       const summary = core.summarize(records);
       this.ledger = s; this.filtered = records;
       const groups = this.build(records.slice(0, d.limit));
@@ -32,7 +32,7 @@ Page({
   typeChange(e) {
     const type = e.currentTarget.dataset.type;
     if (type && !core.TYPES.includes(type)) return;
-    clearTimeout(this.searchTimer); this.setData({ type, categoryId: '', categoryIndex: 0, limit: 100 }); this.refresh();
+    clearTimeout(this.searchTimer); this.setData({ type, categoryId: '', categoryIndex: 0, limit: 100, fixed: type === 'income' ? '' : this.data.fixed }); this.refresh();
   },
   dateChange(e) { this.setData({ [e.currentTarget.dataset.field]: e.detail.value, limit: 100 }); this.refresh(); },
   categoryChange(e) { const i = Number(e.detail.value); this.setData({ categoryId: i ? this.data.categories[i - 1].id : '', limit: 100 }); this.refresh(); },
@@ -43,7 +43,8 @@ Page({
     clearTimeout(this.searchTimer); this.setData({ sortIndex, limit: 100 }); this.refresh();
   },
   search(e) { this.setData({ query: e.detail.value, limit: 100 }); clearTimeout(this.searchTimer); this.searchTimer = setTimeout(() => this.refresh(), 250); },
-  clear() { clearTimeout(this.searchTimer); this.setData({ type: '', start: '', end: '', categoryId: '', categoryIndex: 0, paymentIndex: 0, sortIndex: 0, query: '', limit: 100 }); this.refresh(); },
+  clear() { clearTimeout(this.searchTimer); this.setData({ fixed: '', type: '', start: '', end: '', categoryId: '', categoryIndex: 0, paymentIndex: 0, sortIndex: 0, query: '', limit: 100 }); this.refresh(); },
+  clearFixed() { this.setData({ fixed: '', limit: 100 }); this.refresh(); },
   more() {
     const d = this.data;
     if (!d.hasMore || !this.filtered) return;

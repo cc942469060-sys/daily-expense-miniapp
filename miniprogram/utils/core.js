@@ -1,5 +1,6 @@
 const dates = require('./date');
 const assets = require('./assets');
+const fixed = require('./fixed');
 const { money, moneyText, amountInput, parseCents } = require('./money');
 const TYPES = ['expense', 'income'];
 const PAYMENTS = ['未指定', '微信', '支付宝', '银行卡', '现金', '其他'];
@@ -38,6 +39,7 @@ function validate(s, version) {
   const checkedDates = new Set();
   s.records.forEach(r => {
     if (!r || typeof r.id !== 'string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(r.id) || ids.has(r.id) || !cats.has(r.categoryId) || !Number.isSafeInteger(r.amountCents) || r.amountCents <= 0 || r.amountCents > MAX_CENTS || !PAYMENTS.includes(r.payment) || typeof r.note !== 'string' || r.note.length > 100 || !/^([01]\d|2[0-3]):[0-5]\d$/.test(r.time) || !Number.isSafeInteger(r.createdAt) || r.createdAt < 0 || !Number.isSafeInteger(r.updatedAt) || r.updatedAt < 0 || !Number.isSafeInteger(r.refundCents) || r.refundCents < 0 || r.refundCents > r.amountCents) throw new Error('账单数据无效');
+    if (r.fixedId !== undefined && (typeof r.fixedId !== 'string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(r.fixedId) || r.type === 'income')) throw new Error('账单的固定支出标记无效');
     if (version >= 2 && (!TYPES.includes(r.type) || cats.get(r.categoryId).type !== r.type || (r.type === 'income' && r.refundCents !== 0))) throw new Error('账单类型、分类或退款数据无效');
     if (!checkedDates.has(r.date)) {
       dates.parseDate(r.date);
@@ -50,7 +52,7 @@ function validate(s, version) {
   if (s.settings.expenseCategoryRevision !== undefined && (!Number.isSafeInteger(s.settings.expenseCategoryRevision) || s.settings.expenseCategoryRevision < 0)) throw new Error('分类升级标记无效');
   return s;
 }
-function validateState(s) { validate(s, 3); return assets.validateState(s); }
+function validateState(s) { validate(s, 3); fixed.validateList(s, PAYMENTS); return assets.validateState(s); }
 function upgradeExpenseCategories(s) {
   if (s && s.version === 2) validate(s, 2); else validateState(s);
   if (s.settings.expenseCategoryRevision >= 1) return s;
@@ -108,7 +110,7 @@ function total(records, type = 'expense') {
 function filterRecords(state, filter) {
   const f = filter || {}; const query = String(f.query || '').trim().toLowerCase();
   const cats = {}; state.categories.forEach(c => { cats[c.id] = c; });
-  return state.records.filter(r => (!f.type || r.type === f.type) && (!f.start || r.date >= f.start) && (!f.end || r.date <= f.end) && (!f.categoryId || r.categoryId === f.categoryId) && (!f.payment || r.payment === f.payment) && (!query || (r.note + ' ' + cats[r.categoryId].name).toLowerCase().includes(query)))
+  return state.records.filter(r => (!f.type || r.type === f.type) && (!f.start || r.date >= f.start) && (!f.end || r.date <= f.end) && (!f.categoryId || r.categoryId === f.categoryId) && (!f.payment || r.payment === f.payment) && (!f.fixed || (f.fixed === 'fixed' ? !!r.fixedId : !r.fixedId)) && (!query || (r.note + ' ' + cats[r.categoryId].name).toLowerCase().includes(query)))
     .sort((a, b) => {
       const amountOrder = f.sort === 'amount_desc' ? net(b) - net(a) : f.sort === 'amount_asc' ? net(a) - net(b) : 0;
       // Plain string comparison: dates and times have fixed formats, so this gives the same
@@ -186,7 +188,7 @@ function statistics(state, mode, anchor, today, type = 'expense', customRange) {
   bars.forEach(b => { b.height = b.cents ? Math.max(3, Math.round(b.cents / peak * 100)) : 0; b.amountText = moneyText(b.cents); });
   const top = records.slice().sort((a, b) => net(b) - net(a)).slice(0, 3).map(r => decorate(state, r));
   const label = mode === 'all' || mode === 'custom' ? bounds.start.replace(/-/g, '/') + ' — ' + bounds.end.replace(/-/g, '/') : dates.periodLabel(mode, anchor);
-  return { type, summary, start: bounds.start, end: bounds.end, label, granularity, granularityLabel: { day: '按日汇总', month: '按月汇总', year: '按年汇总' }[granularity], totalText: moneyText(sum), grossText: moneyText(gross), refundText: moneyText(refunded), refundCents: refunded, count: records.length, averageText: moneyText(Math.round(sum / days)), maxText: top.length ? top[0].amountText : '0.00', days, categories, bars, peakText: moneyText(!sum ? 0 : peak), top };
+  return { type, summary, start: bounds.start, end: bounds.end, label, granularity, granularityLabel: { day: '按日汇总', month: '按月汇总', year: '按年汇总' }[granularity], totalText: moneyText(sum), grossText: moneyText(gross), refundText: moneyText(refunded), refundCents: refunded, count: records.length, averageText: moneyText(Math.round(sum / days)), maxText: top.length ? top[0].amountText : '0.00', days, categories, bars, peakText: moneyText(!sum ? 0 : peak), top, fixedSplit: type === 'expense' ? fixed.split(records) : null };
 }
 function createRecord(state, input, previous) {
   const now = Date.now(); const type = input.type;
@@ -201,7 +203,11 @@ function createRecord(state, input, previous) {
   const amountCents = amountToCents(input.amount); const refundCents = amountToCents(input.refund || '0', true);
   if (type === 'income' && refundCents) throw new Error('收入不能登记退款');
   if (refundCents > amountCents) throw new Error('退款不能超过原支出金额');
-  return { id: previous ? previous.id : id('bill'), type, categoryId: input.categoryId, amountCents, refundCents, payment: input.payment, date: input.date, time: input.time, note, createdAt: previous ? previous.createdAt : now, updatedAt: now };
+  const record = { id: previous ? previous.id : id('bill'), type, categoryId: input.categoryId, amountCents, refundCents, payment: input.payment, date: input.date, time: input.time, note, createdAt: previous ? previous.createdAt : now, updatedAt: now };
+  // A bill made from a fixed expense keeps that link through edits, unless it becomes income.
+  const fixedId = previous ? previous.fixedId : input.fixedId;
+  if (fixedId && type === 'expense') record.fixedId = fixedId;
+  return record;
 }
 function csv(state, records) {
   const cell = v => { let s = String(v); if (/^[\s]*[=+\-@\t\r]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; };

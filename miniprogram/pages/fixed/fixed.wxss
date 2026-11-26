@@ -1,0 +1,8 @@
+.save-button { margin-top: 26rpx; line-height: 2.4; }
+.item-info { flex: 1; min-width: 0; }
+.ended { opacity: .6; }
+.clear-end { margin-right: 18rpx; color: #7B897F; }
+switch { flex-shrink: 0; }
+.suggest-panel { background: #FFFBF1; border-color: #F1E6CC; }
+.suggest-actions { flex-shrink: 0; gap: 16rpx; }
+.muted-link { color: #8C7A55; }

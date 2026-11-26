@@ -1,6 +1,6 @@
-const store = require('../../utils/store'); const core = require('../../utils/core'); const dates = require('../../utils/date'); const ui = require('../../utils/ui');
+const store = require('../../utils/store'); const core = require('../../utils/core'); const dates = require('../../utils/date'); const ui = require('../../utils/ui'); const fixed = require('../../utils/fixed');
 Page({
-  data: { id: '', type: 'expense', amount: '', categoryId: '', categories: [], date: '', time: '', today: '', paymentIndex: 0, payments: core.PAYMENTS, note: '', refund: '0', saving: false, ready: false },
+  data: { id: '', type: 'expense', amount: '', categoryId: '', categories: [], date: '', time: '', today: '', paymentIndex: 0, payments: core.PAYMENTS, note: '', refund: '0', fixedId: '', fixedName: '', saving: false, ready: false },
   defaults(s, type) {
     // Categories used most in the last 90 days come first; ties keep the order from category
     // management. The default stays the category of the most recently updated bill of this type.
@@ -22,7 +22,18 @@ Page({
       if (!core.TYPES.includes(type)) throw new Error('收支类型无效');
       this.setData(Object.assign(this.defaults(s, type), { ready: true, id: r ? r.id : '', amount: r ? core.money(r.amountCents) : '', date: r ? r.date : dates.dateKey(now), time: r ? r.time : dates.timeKey(now), today: dates.dateKey(now), note: r ? r.note : '', refund: r ? core.money(r.refundCents) : '0' }, r ? { categoryId: r.categoryId, paymentIndex: core.PAYMENTS.indexOf(r.payment) } : {}));
       if (r) wx.setNavigationBarTitle({ title: '账单详情 / 编辑' });
+      if (r && r.fixedId) { const item = fixed.list(s).find(f => f.id === r.fixedId); this.setData({ fixedName: item ? item.name : '' }); }
+      if (!r && options.fixed) this.fromFixed(s, options.fixed, now);
     });
+  },
+  // Opened from a fixed expense whose amount changes each month: everything but the amount is
+  // filled in, and the amount starts from the last bill made from it.
+  fromFixed(s, itemId, now) {
+    const item = fixed.list(s).find(f => f.id === itemId);
+    if (!item) throw new Error('这项固定支出已不存在');
+    const today = dates.dateKey(now); const cents = fixed.lastAmountCents(s, item);
+    this.setData({ type: 'expense', categoryId: item.categoryId, paymentIndex: core.PAYMENTS.indexOf(item.payment), amount: cents ? core.money(cents) : '', date: fixed.recordDate(item, today), note: item.note ? item.name + ' · ' + item.note : item.name, fixedId: item.id, fixedName: item.name });
+    wx.setNavigationBarTitle({ title: '记固定支出' });
   },
   typeChange(e) {
     if (this.data.saving || !this.data.ready) return;
@@ -30,6 +41,7 @@ Page({
     if (type === this.data.type || !core.TYPES.includes(type)) return;
     ui.run(() => {
       const s = store.read(); const previous = s.records.find(r => r.id === this.data.id);
+      if (type === 'income' && this.data.fixedId && !this.data.id) this.setData({ fixedId: '', fixedName: '' });
       if (type === 'income' && ((previous && previous.refundCents) || Number(this.data.refund) > 0)) throw new Error('这笔支出已有退款，请先修正并保存退款，再修改类型');
       this.setData(Object.assign(this.defaults(s, type), { refund: '0' }, this.data.id ? { categoryId: '' } : {}));
     });
@@ -50,9 +62,9 @@ Page({
     this.setData({ saving: true });
     try {
       const d = this.data;
-      store.saveRecord({ type: d.type, amount: d.amount, categoryId: d.categoryId, date: d.date, time: d.time, payment: d.payments[d.paymentIndex], note: d.note, refund: d.refund }, d.id);
+      store.saveRecord({ type: d.type, amount: d.amount, categoryId: d.categoryId, date: d.date, time: d.time, payment: d.payments[d.paymentIndex], note: d.note, refund: d.refund, fixedId: d.fixedId }, d.id);
       ui.toast('已保存到本地');
-      if (more) { this.savedAt = Date.now(); this.setData({ amount: '', note: '', refund: '0', time: dates.timeKey(new Date()) }); }
+      if (more) { this.savedAt = Date.now(); this.setData({ amount: '', note: '', refund: '0', fixedId: '', fixedName: '', time: dates.timeKey(new Date()) }); }
       else { this.leaving = true; wx.navigateBack(); }
     } catch (e) { ui.error(e); }
     finally { if (!this.leaving) this.setData({ saving: false }); }

@@ -1,6 +1,8 @@
 const core = require('./core');
 const assets = require('./assets');
 const persistence = require('./ledger-storage');
+const fixed = require('./fixed');
+const dates = require('./date');
 const KEY = 'daily-expense:state:v3'; const SAFETY_KEY = 'daily-expense:before-restore:v3';
 const V2_KEY = 'daily-expense:state:v2'; const V2_SAFETY_KEY = 'daily-expense:before-restore:v2';
 const LEGACY_KEY = 'daily-expense:state:v1'; const LEGACY_SAFETY_KEY = 'daily-expense:before-restore:v1';
@@ -42,8 +44,64 @@ function removeCategory(categoryId, targetId) {
   if (s.categories.filter(c => c.type === category.type).length <= 1) throw new Error('每种收支类型至少保留一个分类');
   if (targetId === categoryId || !target || target.type !== category.type) throw new Error('请选择同一收支类型的迁移分类');
   s.records.forEach(r => { if (r.categoryId === categoryId) r.categoryId = targetId; });
+  fixed.list(s).forEach(f => { if (f.categoryId === categoryId) f.categoryId = targetId; });
   s.categories = s.categories.filter(c => c.id !== categoryId); write(s);
 }
+function fixedInfo(s, input, itemId) {
+  const name = String(input.name || '').trim(); const note = String(input.note || '').trim(); const day = Number(input.day); const variable = input.variable === true;
+  if (!name || name.length > 12) throw new Error('名称须为 1—12 个字');
+  if (fixed.list(s).some(f => f.name.trim() === name && f.id !== itemId)) throw new Error('已有同名的固定支出');
+  if (!s.categories.some(c => c.id === input.categoryId && c.type === 'expense')) throw new Error('请选择支出分类');
+  if (!Number.isSafeInteger(day) || day < 1 || day > 31) throw new Error('请选择每月 1—31 日');
+  if (!core.PAYMENTS.includes(input.payment)) throw new Error('支付方式无效');
+  if (note.length > 80) throw new Error('备注最多 80 字');
+  const endMonth = String(input.endMonth || '');
+  if (endMonth && !/^\d{4}-(0[1-9]|1[0-2])$/.test(endMonth)) throw new Error('结束月份无效');
+  const blank = String(input.amount === undefined || input.amount === null ? '' : input.amount).trim() === '';
+  if (blank && !variable) throw new Error('请输入每月金额；金额每月不同时可打开「金额每月会变」');
+  const amountCents = blank ? 0 : core.amountToCents(input.amount, variable);
+  return { name, categoryId: input.categoryId, amountCents, variable, day, payment: input.payment, note, endMonth };
+}
+// Templates for monthly bills. Saving or deleting one never changes bills already recorded.
+// linkIds: bills a suggestion was built from. They are marked as made from the new template, so
+// this month's bill is not recorded twice and statistics count them as fixed expenses.
+function saveFixed(input, itemId, linkIds = []) {
+  const s = read(); const items = fixed.list(s).slice(); const info = fixedInfo(s, input, itemId); const now = Date.now();
+  if (itemId) {
+    const index = items.findIndex(f => f.id === itemId);
+    if (index < 0) throw new Error('这项固定支出已不存在');
+    items[index] = Object.assign({}, items[index], info, { updatedAt: Math.max(now, items[index].updatedAt) });
+  } else {
+    if (items.length >= fixed.MAX_FIXED) throw new Error(`最多设置 ${fixed.MAX_FIXED} 项固定支出`);
+    items.push(Object.assign({ id: core.id('fixed') }, info, { createdAt: now, updatedAt: now }));
+  }
+  const saved = items.find(f => f.id === (itemId || items[items.length - 1].id));
+  if (!itemId) s.records.forEach(r => { if (linkIds.includes(r.id) && r.type === 'expense' && !r.fixedId) r.fixedId = saved.id; });
+  s.fixedExpenses = items; write(s); return saved;
+}
+function removeFixed(itemId) {
+  const s = read();
+  if (!fixed.list(s).some(f => f.id === itemId)) throw new Error('这项固定支出已不存在');
+  s.fixedExpenses = fixed.list(s).filter(f => f.id !== itemId); write(s);
+}
+// One-tap bill from a fixed-amount template. Returns { duplicate: true } without saving when this
+// month already has a bill from it, unless the user confirmed another one (again = true).
+function recordFixed(itemId, again = false) {
+  const s = read(); const item = fixed.list(s).find(f => f.id === itemId); const now = new Date(); const today = dates.dateKey(now);
+  if (!item) throw new Error('这项固定支出已不存在');
+  if (item.variable) throw new Error('这项金额每月不同，请在记账页确认金额');
+  if (!again && fixed.billsOf(s, item.id, today.slice(0, 7)).length) return { duplicate: true };
+  const record = core.createRecord(s, { type: 'expense', amount: core.money(item.amountCents), categoryId: item.categoryId, date: fixed.recordDate(item, today), time: dates.timeKey(now), payment: item.payment, note: item.note ? item.name + ' · ' + item.note : item.name, fixedId: item.id });
+  s.records.push(record); write(s); return { record };
+}
+// Suggestions the user waved away. A display preference kept outside the ledger, like the
+// backup reminder snooze; losing it only brings a suggestion back.
+const FIXED_DISMISSED_KEY = 'daily-expense:fixed-dismissed:v1';
+function dismissedSuggestions() {
+  try { const v = wx.getStorageSync(FIXED_DISMISSED_KEY); return Array.isArray(v) ? v.filter(k => typeof k === 'string') : []; } catch (e) { return []; }
+}
+function fixedSuggestions(s, today) { return fixed.suggestions(s, today, dismissedSuggestions()); }
+function dismissSuggestion(key) { wx.setStorageSync(FIXED_DISMISSED_KEY, dismissedSuggestions().filter(k => k !== key).concat(key).slice(-100)); }
 function setBudget(v) { const s = read(); s.settings.budgetCents = core.amountToCents(v, true); write(s); }
 function parseBackup(text) {
   let data; try { data = JSON.parse(text); } catch (e) { throw new Error('文件不是有效的 JSON 备份'); }
@@ -198,4 +256,4 @@ function removeAssetCategory(categoryId, targetId) {
   s.accounts.forEach(a => { if (a.categoryId === categoryId) a.categoryId = targetId; });
   s.assetCategories = s.assetCategories.filter(c => c.id !== categoryId); write(s);
 }
-module.exports = { KEY, SAFETY_KEY, REMINDER_KEY, backupReminder, snoozeBackupReminder, V2_KEY, V2_SAFETY_KEY, LEGACY_KEY, LEGACY_SAFETY_KEY, read, write, saveRecord, removeRecord, saveCategory, removeCategory, setBudget, parseBackup, backupText, prepareBackup, restore, hasSafety, restoreSafety, markBackup, saveAccount, updateAccountValue, archiveAccount, removeAccount, setAssetAmountsHidden, saveAssetCategory, removeAssetCategory, protect: persistence.protect, warm: persistence.warm, recordError: persistence.recordError, diagnostics: persistence.diagnostics, protectionWarning: persistence.protectionWarning, capacity: persistence.capacity, capacityText: persistence.capacityText, capacityWarning: persistence.capacityWarning, removeExports: persistence.removeExports, recoveryCandidate, restoreCandidate };
+module.exports = { saveFixed, removeFixed, recordFixed, fixedSuggestions, dismissSuggestion, FIXED_DISMISSED_KEY, KEY, SAFETY_KEY, REMINDER_KEY, backupReminder, snoozeBackupReminder, V2_KEY, V2_SAFETY_KEY, LEGACY_KEY, LEGACY_SAFETY_KEY, read, write, saveRecord, removeRecord, saveCategory, removeCategory, setBudget, parseBackup, backupText, prepareBackup, restore, hasSafety, restoreSafety, markBackup, saveAccount, updateAccountValue, archiveAccount, removeAccount, setAssetAmountsHidden, saveAssetCategory, removeAssetCategory, protect: persistence.protect, warm: persistence.warm, recordError: persistence.recordError, diagnostics: persistence.diagnostics, protectionWarning: persistence.protectionWarning, capacity: persistence.capacity, capacityText: persistence.capacityText, capacityWarning: persistence.capacityWarning, removeExports: persistence.removeExports, recoveryCandidate, restoreCandidate };
