@@ -18,3 +18,4 @@
 }
 .extra-button { margin-top: 18rpx; }
 .save-area .secondary { margin-top: 24rpx; }
+.fixed-tag { margin-top: 18rpx; padding: 14rpx 20rpx; border-radius: 16rpx; background: #FFF6E3; color: #6F5420; font-size: 24rpx; }

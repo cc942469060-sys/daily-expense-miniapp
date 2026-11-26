@@ -5,3 +5,9 @@
 .reminder { margin-top: 24rpx; padding: 24rpx; border-radius: 20rpx; background: #FFF6E3; color: #6F5420; font-size: 25rpx; line-height: 1.8; }
 .reminder-actions { margin-top: 6rpx; }
 .reminder .later { color: #8C7A55; }
+.fixed-row { padding-top: 24rpx; }
+.fixed-info { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.fixed-meta { margin-top: 8rpx; }
+.fixed-meta.overdue { color: #B04E49; }
+.fixed-done { color: #22684C; font-size: 25rpx; padding: 14rpx 8rpx; flex-shrink: 0; }
+.fixed-hint { margin-top: 22rpx; padding: 22rpx 24rpx; border-radius: 20rpx; background: #FFF; border: 1rpx dashed #D5DED3; color: #64756A; font-size: 24rpx; }

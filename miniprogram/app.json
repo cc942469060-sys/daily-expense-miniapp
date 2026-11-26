@@ -1,5 +1,5 @@
 {
-  "pages": ["pages/home/home", "pages/stats/stats", "pages/assets/assets", "pages/mine/mine", "pages/record/record", "pages/bills/bills", "pages/categories/categories", "pages/backup/backup", "pages/account/account", "pages/asset-categories/asset-categories"],
+  "pages": ["pages/home/home", "pages/stats/stats", "pages/assets/assets", "pages/mine/mine", "pages/record/record", "pages/bills/bills", "pages/categories/categories", "pages/backup/backup", "pages/account/account", "pages/asset-categories/asset-categories", "pages/fixed/fixed"],
   "window": { "navigationBarTitleText": "小日账", "navigationBarBackgroundColor": "#F6F7F2", "navigationBarTextStyle": "black", "backgroundColor": "#F6F7F2" },
   "tabBar": {
     "color": "#7B877F", "selectedColor": "#22684C", "backgroundColor": "#FFFFFF", "borderStyle": "white",

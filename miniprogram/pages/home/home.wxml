@@ -20,6 +20,16 @@
       </view>
     </view>
     <button class="primary add-button" bindtap="add">＋ 记一笔</button>
+    <view wx:if="{{fixedPlan.total}}" class="panel">
+      <view class="row"><text class="section-title">本月固定支出</text><text class="link" bindtap="manageFixed">已记 {{fixedPlan.done}}/{{fixedPlan.total}} · 管理 ›</text></view>
+      <view wx:for="{{fixedPlan.items}}" wx:key="id" class="row fixed-row">
+        <view class="fixed-info"><view>{{item.icon}} {{item.name}}</view><view class="muted fixed-meta {{item.status === 'overdue' ? 'overdue' : ''}}">{{item.dueText}}{{item.status === 'overdue' ? ' · 已过扣款日' : item.status === 'today' ? ' · 今天扣款' : ''}}{{item.amountText ? ' · ' + (item.estimated ? '上次 ' : '') + '¥' + item.amountText : ''}}{{item.count > 1 ? ' · 本月 ' + item.count + ' 笔' : ''}}</view></view>
+        <view wx:if="{{item.status === 'done'}}" class="fixed-done" data-id="{{item.id}}" bindtap="fixedTap">已记 ✓</view>
+        <button wx:else class="{{item.status === 'upcoming' ? 'secondary' : 'primary'}} small-button" data-id="{{item.id}}" bindtap="fixedTap">{{item.variable ? '填金额' : '记一笔'}}</button>
+      </view>
+      <view class="note">点「记一笔」直接记入；金额每月会变的项会打开记账页确认金额。点「已记」可查看或修改那笔账单。</view>
+    </view>
+    <view wx:else class="fixed-hint" bindtap="manageFixed">📌 房贷、话费等每月固定支出，可设为模板一键记账 ›</view>
     <view wx:if="{{budget}}" class="panel"><view class="row"><text class="section-title">本月支出预算</text><text class="muted">{{overspent ? '已超出' : '还可花'}} ¥{{remainingText}}</text></view><view class="progress budget-progress"><view class="progress-fill" style="width: {{budgetPercent}}%;"></view></view><view class="note">按净支出计算，收入不抵扣预算用量。</view></view>
     <view class="note">结余 = 收入 − 净支出。退款扣减原支出日期，结余不代表账户余额。</view>
     <view class="row recent-heading"><text class="section-title">近 30 天记录</text><text class="link" bindtap="allBills">全部账单 ›</text></view>

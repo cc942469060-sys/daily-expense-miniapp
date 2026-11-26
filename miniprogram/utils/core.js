@@ -1,5 +1,6 @@
 const dates = require('./date');
 const assets = require('./assets');
+const fixed = require('./fixed');
 const { money, moneyText, amountInput, parseCents } = require('./money');
 const TYPES = ['expense', 'income'];
 const PAYMENTS = ['未指定', '微信', '支付宝', '银行卡', '现金', '其他'];
@@ -38,6 +39,7 @@ function validate(s, version) {
   const checkedDates = new Set();
   s.records.forEach(r => {
     if (!r || typeof r.id !== 'string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(r.id) || ids.has(r.id) || !cats.has(r.categoryId) || !Number.isSafeInteger(r.amountCents) || r.amountCents <= 0 || r.amountCents > MAX_CENTS || !PAYMENTS.includes(r.payment) || typeof r.note !== 'string' || r.note.length > 100 || !/^([01]\d|2[0-3]):[0-5]\d$/.test(r.time) || !Number.isSafeInteger(r.createdAt) || r.createdAt < 0 || !Number.isSafeInteger(r.updatedAt) || r.updatedAt < 0 || !Number.isSafeInteger(r.refundCents) || r.refundCents < 0 || r.refundCents > r.amountCents) throw new Error('账单数据无效');
+    if (r.fixedId !== undefined && (typeof r.fixedId !== 'string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(r.fixedId) || r.type === 'income')) throw new Error('账单的固定支出标记无效');
     if (version >= 2 && (!TYPES.includes(r.type) || cats.get(r.categoryId).type !== r.type || (r.type === 'income' && r.refundCents !== 0))) throw new Error('账单类型、分类或退款数据无效');
     if (!checkedDates.has(r.date)) {
       dates.parseDate(r.date);
@@ -50,7 +52,7 @@ function validate(s, version) {
   if (s.settings.expenseCategoryRevision !== undefined && (!Number.isSafeInteger(s.settings.expenseCategoryRevision) || s.settings.expenseCategoryRevision < 0)) throw new Error('分类升级标记无效');
   return s;
 }
-function validateState(s) { validate(s, 3); return assets.validateState(s); }
+function validateState(s) { validate(s, 3); fixed.validateList(s, PAYMENTS); return assets.validateState(s); }
 function upgradeExpenseCategories(s) {
   if (s && s.version === 2) validate(s, 2); else validateState(s);
   if (s.settings.expenseCategoryRevision >= 1) return s;
@@ -201,7 +203,11 @@ function createRecord(state, input, previous) {
   const amountCents = amountToCents(input.amount); const refundCents = amountToCents(input.refund || '0', true);
   if (type === 'income' && refundCents) throw new Error('收入不能登记退款');
   if (refundCents > amountCents) throw new Error('退款不能超过原支出金额');
-  return { id: previous ? previous.id : id('bill'), type, categoryId: input.categoryId, amountCents, refundCents, payment: input.payment, date: input.date, time: input.time, note, createdAt: previous ? previous.createdAt : now, updatedAt: now };
+  const record = { id: previous ? previous.id : id('bill'), type, categoryId: input.categoryId, amountCents, refundCents, payment: input.payment, date: input.date, time: input.time, note, createdAt: previous ? previous.createdAt : now, updatedAt: now };
+  // A bill made from a fixed expense keeps that link through edits, unless it becomes income.
+  const fixedId = previous ? previous.fixedId : input.fixedId;
+  if (fixedId && type === 'expense') record.fixedId = fixedId;
+  return record;
 }
 function csv(state, records) {
   const cell = v => { let s = String(v); if (/^[\s]*[=+\-@\t\r]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; };

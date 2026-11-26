@@ -1,0 +1,27 @@
+<view class="page">
+  <view class="title">每月固定支出</view><view class="subtitle">房贷、话费、电费……设好一次，每月一键记账</view>
+  <view wx:if="{{storageError}}" class="error">{{storageError}}</view>
+  <block wx:else>
+    <view class="panel">
+      <view class="row"><text class="section-title">{{editingId ? '编辑固定支出' : '新增固定支出'}}</text><text wx:if="{{editingId}}" class="link" bindtap="cancel">取消编辑</text></view>
+      <view class="field"><view class="field-label">名称</view><input class="input" value="{{name}}" maxlength="12" placeholder="例如：房贷、话费、电费" data-field="name" bindinput="input" /></view>
+      <view class="field row"><view><view>金额每月会变</view><view class="muted">如电费、水费：点击时打开记账页，确认金额再保存</view></view><switch checked="{{variable}}" color="#22684C" bindchange="variableChange" /></view>
+      <view class="field"><view class="field-label">{{variable ? '参考金额（元）· 可选，之后按上月金额预填' : '每月金额（元）'}}</view><input class="input" type="digit" value="{{amount}}" maxlength="10" placeholder="0.00" data-field="amount" bindinput="input" /></view>
+      <view class="field row"><text>扣款日</text><picker range="{{days}}" value="{{dayIndex}}" data-field="dayIndex" bindchange="pick"><view class="link">{{days[dayIndex]}} ›</view></picker></view>
+      <view class="field row"><text>支出分类</text><picker range="{{categories}}" range-key="name" value="{{categoryIndex}}" data-field="categoryIndex" bindchange="pick"><view class="link">{{categories[categoryIndex].icon}} {{categories[categoryIndex].name}} ›</view></picker></view>
+      <view class="field row"><text>支付方式</text><picker range="{{payments}}" value="{{paymentIndex}}" data-field="paymentIndex" bindchange="pick"><view class="link">{{payments[paymentIndex]}} ›</view></picker></view>
+      <view class="field row"><text>结束月份 · 可选</text><view class="row"><text wx:if="{{endMonth}}" class="link clear-end" bindtap="clearEnd">清除</text><picker mode="date" fields="month" value="{{endMonth || thisMonth}}" start="2000-01" end="2100-12" bindchange="endChange"><view class="link">{{endMonth || '一直有效'}} ›</view></picker></view></view>
+      <view class="field"><view class="field-label">备注 · 可选</view><input class="input" value="{{note}}" maxlength="80" placeholder="例如：工商银行代扣" data-field="note" bindinput="input" /></view>
+      <view class="note">29—31 日在小月按当月最后一天计算。到扣款日或之后点击，账单记在扣款日；提前点击则记在当天。房贷、分期可填结束月份，之后不再出现在首页。</view>
+      <button class="primary save-button" bindtap="save">{{editingId ? '保存修改' : '添加'}}</button>
+    </view>
+    <view class="panel">
+      <view class="section-title">已设置 · {{items.length}} / {{max}}</view>
+      <view wx:if="{{!items.length}}" class="empty"><view class="empty-icon">📌</view><view>还没有固定支出。添加后，首页会显示本月清单，点一下即可记账。</view></view>
+      <view wx:for="{{items}}" wx:key="id" class="row menu-item {{item.ended ? 'ended' : ''}}">
+        <view class="item-info" bindtap="edit" data-id="{{item.id}}"><view>{{item.icon}} {{item.name}}<text wx:if="{{item.ended}}" class="muted">（已结束）</text></view><view class="subtitle">{{item.amountText ? '¥' + item.amountText : '金额每月填写'}}{{item.variable ? ' · 金额会变' : ''}} · 每月 {{item.day}} 日 · {{item.categoryName}}{{item.payment !== '未指定' ? ' · ' + item.payment : ''}}{{item.endText ? ' · 至 ' + item.endText : ''}}</view></view>
+        <button class="danger small-button" data-id="{{item.id}}" bindtap="remove">删除</button>
+      </view>
+    </view>
+  </block>
+</view>

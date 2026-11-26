@@ -1,5 +1,6 @@
 <view class="page" wx:if="{{ready}}">
   <view class="subtitle">{{id ? '每一笔，都有迹可循' : '记下一笔小小的日常'}}</view>
+  <view wx:if="{{fixedName}}" class="fixed-tag">📌 固定支出 · {{fixedName}}{{id ? '' : '（确认本月金额后保存）'}}</view>
   <view class="type-tabs">
     <view class="type-tab {{type === 'expense' ? 'selected' : ''}}" data-type="expense" bindtap="typeChange">支出</view>
     <view class="type-tab {{type === 'income' ? 'selected' : ''}}" data-type="income" bindtap="typeChange">收入</view>
